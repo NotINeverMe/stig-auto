@@ -25,6 +25,13 @@ run_cmd() {
     fi
 }
 
+# If running in dry-run mode, create a placeholder reports directory so
+# subsequent scripts have an expected location to write to.
+if $DRY_RUN; then
+    mkdir -p reports
+    echo "Placeholder for dry run" > reports/dry-run.txt
+fi
+
 # Determine STIG profile based on local OS
 detect_stig_profile() {
     if [[ -f /etc/os-release ]]; then
