@@ -18,10 +18,12 @@ choco install git ansible openscap -y
 # Clone repo to C:\stig-pipe if not present
 if (!(Test-Path "C:\stig-pipe")) {
     Write-Host "Cloning repository to C:\stig-pipe"
-    git clone (Get-Location).Path "C:\stig-pipe"
+    git clone https://github.com/NotINeverMe/stig-auto.git "C:\stig-pipe"
 }
 
+# Change to repo directory and install Ansible roles
 Set-Location "C:\stig-pipe"
+ansible-galaxy install -r ansible\requirements.yml --roles-path roles\
 
 # Execute remediation pipeline
 Write-Host "Getting SCAP content..."

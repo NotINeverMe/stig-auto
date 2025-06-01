@@ -1,0 +1,15 @@
+# Ignore Ansible roles downloaded at runtime
+roles/
+
+# Ignore downloaded SCAP content
+scap_content/
+
+# Ignore generated scan reports
+reports/
+
+# General build artifacts and logs
+*.log
+*.tmp
+*~
+.DS_Store
+
