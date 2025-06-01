@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run bootstrap dry run
+        run: sudo bash bootstrap.sh --dry-run
+      - name: Upload reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: reports
+          path: reports/
