@@ -24,9 +24,20 @@ jobs:
           sudo apt-get install -y ansible
       - name: Validate role versions exist
         run: |
-          awk '/^ *- name:/{role=$3} /^ *version:/{ver=$2; gsub(/["\'\']/, "", ver);
-               cmd=sprintf("git ls-remote --exit-code --tags https://github.com/ansible-lockdown/%s.git refs/tags/%s", toupper(role) ".git", ver);
-               system(cmd)}' ansible/requirements.yml
+          awk '
+            /^ *- name:/ { role = $3 }
+            /^ *version:/ { 
+              ver = $2
+              gsub(/["'\'']/, "", ver)
+              repo = toupper(role)
+              cmd = sprintf("git ls-remote --exit-code --tags https://github.com/ansible-lockdown/%s.git refs/tags/%s", repo, ver)
+              print "Validating " role " version " ver
+              if (system(cmd) != 0) {
+                print "Error: Version " ver " not found for " role
+                exit 1
+              }
+            }
+          ' ansible/requirements.yml
       - name: Install Ansible roles
         run: |
           ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
