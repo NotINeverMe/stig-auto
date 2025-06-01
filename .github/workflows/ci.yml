@@ -22,6 +22,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ansible
+      - name: Install Ansible roles
+        run: |
+          ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
       - name: Ansible syntax check
         run: ansible-playbook ansible/remediate.yml --syntax-check
       - name: Run bootstrap script in dry-run mode
