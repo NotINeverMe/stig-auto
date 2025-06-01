@@ -14,6 +14,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Run ShellCheck
+        run: |
+          docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck-alpine:v0.9.0 \
+            shellcheck $(git ls-files '*.sh')
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+      - name: Ansible syntax check
+        run: ansible-playbook ansible/remediate.yml --syntax-check
       - name: Run bootstrap script in dry-run mode
         run: sudo bash bootstrap.sh --dry-run
       - name: Upload reports
