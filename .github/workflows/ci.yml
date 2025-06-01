@@ -17,7 +17,7 @@ jobs:
       - name: Run ShellCheck
         run: |
           docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck-alpine:v0.9.0 \
-            shellcheck $(git ls-files '*.sh')
+            shellcheck -x $(git ls-files '*.sh')
       - name: Install Ansible
         run: |
           sudo apt-get update
