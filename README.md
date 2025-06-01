@@ -1,61 +1,39 @@
 # STIG Pipe - Automated STIG Compliance Pipeline
 
-Automated Security Technical Implementation Guide (STIG) remediation pipeline using OpenSCAP scanning and Ansible automation.
+Automated STIG remediation pipeline using OpenSCAP and Ansible.
 
 ## Quick Start
 
-### Run on Linux
+### Linux
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.sh | sudo bash
 ```
 
-### Run on Windows
+### Windows
 
 ```powershell
 iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1)
 ```
 
-## What This Does
+## Overview
 
-1. **Downloads SCAP content** from DoD Cyber Exchange or SCAP Security Guide
-2. **Runs baseline scan** using OpenSCAP to identify current compliance status
-3. **Executes Ansible remediation** focusing on CAT I and CAT II findings
-4. **Verifies remediation** with post-remediation scan
+1. Download SCAP content
+2. Run baseline scan
+3. Apply CAT I/II remediation
+4. Verify results
 
-## CAT I/II Focus
+## Manual Steps
 
-This pipeline focuses on Category I (Critical) and Category II (High) findings for maximum security impact with minimal system disruption. Category III findings are excluded to prevent potential operational issues.
-
-- **CAT I**: Critical vulnerabilities that could lead to immediate system compromise
-- **CAT II**: High-severity vulnerabilities with significant security impact
-
-## Manual Execution
+Clone the repo, install roles, fetch SCAP content, then run:
 
 ```bash
-# Clone repository
-git clone https://github.com/NotINeverMe/stig-auto.git
-cd stig-auto
-
-# Install Ansible roles
-ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
-
-# Get SCAP content
-./scripts/get_scap_content.sh
-
-# Run baseline scan
 ./scripts/scan.sh --baseline
-
-# Apply remediation
 ansible-playbook ansible/remediate.yml -t CAT_I,CAT_II
-
-# Verify results
 ./scripts/verify.sh
 ```
 
-## Quarterly Updates
-
-Keep STIG content and remediation roles current:
+## Updates
 
 ```bash
 git pull
@@ -68,8 +46,4 @@ ansible-galaxy install -r ansible/requirements.yml --roles-path roles/ --force
 - Ubuntu 22.04
 - Windows Server 2022
 
-## Output
-
-Reports are saved in the `reports/` directory:
-- `report-baseline-*.html` - Pre-remediation compliance status
-- `report-after-*.html` - Post-remediation verification
+Reports appear under `reports/` with before and after HTML summaries.
