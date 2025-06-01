@@ -21,7 +21,7 @@ fi
 # Clone repo to /opt/stig-pipe if not already present
 if [[ ! -d /opt/stig-pipe ]]; then
     echo "Cloning repository to /opt/stig-pipe"
-    sudo git clone "$(pwd)" /opt/stig-pipe
+    sudo git clone https://github.com/NotINeverMe/stig-auto.git /opt/stig-pipe
     sudo chown -R "$(whoami):$(whoami)" /opt/stig-pipe
 fi
 
