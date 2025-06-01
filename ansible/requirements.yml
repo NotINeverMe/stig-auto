@@ -2,7 +2,7 @@
 roles:
   - name: rhel8-stig
     src: git+https://github.com/ansible-lockdown/RHEL8-STIG.git
-    version: v3.4.0
+    version: "4.0.0"
   - name: ubuntu22-stig
     src: git+https://github.com/ansible-lockdown/UBUNTU22-STIG.git
     version: v1.2.0
