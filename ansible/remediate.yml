@@ -1,0 +1,12 @@
+---
+- hosts: localhost
+  gather_facts: yes
+  become: yes
+  vars:
+    # For Windows, override via --extra-vars "stig_application_profile=windows2022"
+    stig_application_profile: "{{ lookup('ansible.builtin.env', 'STIG_PROFILE', default='rhel8') }}"
+  roles:
+    - role: "{{ stig_application_profile }}-stig"
+      tags:
+        - CAT_I
+        - CAT_II

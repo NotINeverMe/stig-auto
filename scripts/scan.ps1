@@ -1,0 +1,50 @@
+param(
+    [switch]$Baseline,
+    [switch]$After
+)
+
+if (-not $Baseline -and -not $After) {
+    Write-Host "Usage: .\scan.ps1 [-Baseline|-After]"
+    Write-Host "  -Baseline: Run baseline scan before remediation"
+    Write-Host "  -After:    Run scan after remediation"
+    exit 1
+}
+
+$Mode = if ($Baseline) { "baseline" } else { "after" }
+
+# Create reports directory
+New-Item -ItemType Directory -Force -Path "reports" | Out-Null
+
+# Generate timestamp for unique filenames
+$Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+
+# Find the most recent SCAP content file
+$ScapFile = Get-ChildItem -Path "scap_content" -Filter "*.xml" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+if (-not $ScapFile) {
+    Write-Error "No SCAP content found. Run get_scap_content.ps1 first."
+    exit 1
+}
+
+Write-Host "Using SCAP content: $($ScapFile.FullName)"
+Write-Host "Running $Mode scan..."
+
+try {
+    # Run OpenSCAP evaluation
+    $ResultsFile = "reports\results-$Mode-$Timestamp.arf"
+    $ReportFile = "reports\report-$Mode-$Timestamp.html"
+    
+    & oscap.exe xccdf eval `
+        --profile stig `
+        --results $ResultsFile `
+        --report $ReportFile `
+        $ScapFile.FullName
+    
+    Write-Host "Scan complete. Results saved to:"
+    Write-Host "  ARF: $ResultsFile"
+    Write-Host "  HTML: $ReportFile"
+}
+catch {
+    Write-Error "Scan failed: $_"
+    exit 1
+}
