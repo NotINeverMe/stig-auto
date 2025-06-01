@@ -28,6 +28,28 @@ if [[ -z "$MODE" ]]; then
     exit 1
 fi
 
+# Determine OS and choose default STIG profile
+DEFAULT_PROFILE=""
+if [[ -f /etc/os-release ]]; then
+    source /etc/os-release
+    case "${ID}" in
+        rhel*|centos*|rocky*|almalinux*)
+            DEFAULT_PROFILE="xccdf_org.ssgproject.content_profile_stig"
+            ;;
+        ubuntu*)
+            DEFAULT_PROFILE="xccdf_org.ssgproject.content_profile_stig"
+            ;;
+        *)
+            DEFAULT_PROFILE="xccdf_org.ssgproject.content_profile_stig"
+            ;;
+    esac
+else
+    DEFAULT_PROFILE="xccdf_org.ssgproject.content_profile_stig"
+fi
+
+# Allow override via environment variable
+STIG_PROFILE_ID="${STIG_PROFILE_ID:-$DEFAULT_PROFILE}"
+
 # Create reports directory
 mkdir -p reports
 
@@ -47,7 +69,7 @@ echo "Running $MODE scan..."
 
 # Run OpenSCAP evaluation
 oscap xccdf eval \
-    --profile stig \
+    --profile "$STIG_PROFILE_ID" \
     --results "reports/results-${MODE}-${TIMESTAMP}.arf" \
     --report "reports/report-${MODE}-${TIMESTAMP}.html" \
     "$SCAP_FILE"

@@ -35,6 +35,25 @@ ansible-playbook ansible/remediate.yml -t CAT_I,CAT_II
 ```
 Use `--os` (Linux) or `-OS` (Windows) to override automatic OS detection when downloading SCAP content.
 
+### Environment Variables
+
+The scanning scripts read the `STIG_PROFILE_ID` environment variable to
+determine which OpenSCAP profile to evaluate. When the variable is not set a
+default profile for the detected operating system is used.
+
+Example on Linux:
+
+```bash
+STIG_PROFILE_ID=xccdf_org.ssgproject.content_profile_ospp ./scripts/scan.sh --baseline
+```
+
+Example on Windows:
+
+```powershell
+$env:STIG_PROFILE_ID = 'xccdf_org.ssgproject.content_profile_ospp'
+./scripts/scan.ps1 -Baseline
+```
+
 ## Updates
 
 ```bash
