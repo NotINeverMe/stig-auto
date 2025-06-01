@@ -53,6 +53,12 @@ Reports are saved in the `reports/` directory:
 - `report-after-*.html` - Post-remediation verification
 Reports appear under `reports/` with before and after HTML summaries.
 
+## Exit Codes
+
+OpenSCAP returns exit code `2` when one or more rules fail. The `scan.sh` and
+`scan.ps1` scripts capture this status and continue running, only exiting if the
+code is something other than `0` or `2`.
+
 ## License
 
 See [LICENSE](LICENSE) for the proprietary license terms. Usage requires explicit permission from the repository owner.

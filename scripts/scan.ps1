@@ -33,13 +33,18 @@ try {
     # Run OpenSCAP evaluation
     $ResultsFile = "reports\results-$Mode-$Timestamp.arf"
     $ReportFile = "reports\report-$Mode-$Timestamp.html"
-    
+
     & oscap.exe xccdf eval `
         --profile stig `
         --results $ResultsFile `
         --report $ReportFile `
         $ScapFile.FullName
-    
+
+    $rc = $LASTEXITCODE
+    if ($rc -ne 0 -and $rc -ne 2) {
+        throw "OpenSCAP failed with exit code $rc"
+    }
+
     Write-Host "Scan complete. Results saved to:"
     Write-Host "  ARF: $ResultsFile"
     Write-Host "  HTML: $ReportFile"
