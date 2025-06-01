@@ -52,3 +52,7 @@ Reports are saved in the `reports/` directory:
 - `report-baseline-*.html` - Pre-remediation compliance status
 - `report-after-*.html` - Post-remediation verification
 Reports appear under `reports/` with before and after HTML summaries.
+
+## License
+
+See [LICENSE](LICENSE) for the proprietary license terms. Usage requires explicit permission from the repository owner.
