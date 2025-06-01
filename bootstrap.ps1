@@ -16,6 +16,22 @@ function Run {
     }
 }
 
+# Determine STIG profile based on Windows version
+function Get-StigProfile {
+    try {
+        $os = Get-CimInstance Win32_OperatingSystem
+        if ($os.Caption -match 'Windows Server 2022') {
+            return 'windows2022'
+        }
+    } catch {
+        # Default to windows2022 if detection fails
+    }
+    return 'windows2022'
+}
+
+$env:STIG_PROFILE = Get-StigProfile
+Write-Host "Detected STIG profile: $env:STIG_PROFILE"
+
 if ($DryRun) {
     Write-Host "Dry run mode - commands will be printed only" -ForegroundColor Yellow
 }

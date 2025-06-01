@@ -25,6 +25,27 @@ run_cmd() {
     fi
 }
 
+# Determine STIG profile based on local OS
+detect_stig_profile() {
+    if [[ -f /etc/os-release ]]; then
+        source /etc/os-release
+        if [[ "$ID" == "ubuntu" && "${VERSION_ID%%.*}" == "22" ]]; then
+            echo "ubuntu22"
+            return
+        fi
+        if [[ "$ID" =~ ^(rhel|centos|rocky|almalinux) ]] && [[ "${VERSION_ID%%.*}" == "8" ]]; then
+            echo "rhel8"
+            return
+        fi
+    fi
+    echo "rhel8"
+}
+
+# Export STIG profile for Ansible
+STIG_PROFILE="$(detect_stig_profile)"
+export STIG_PROFILE
+echo "Detected STIG profile: $STIG_PROFILE"
+
 # Detect package manager and install dependencies
 if command -v apt &> /dev/null; then
     echo "Detected apt package manager"
