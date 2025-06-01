@@ -29,7 +29,11 @@ jobs:
             /^ *version:/ { 
               ver = $2
               gsub(/["'\'']/, "", ver)
-              repo = toupper(role)
+              # Map role names to correct repository names
+              if (role == "rhel8-stig") repo = "RHEL8-STIG"
+              else if (role == "ubuntu22-stig") repo = "UBUNTU22-STIG"  
+              else if (role == "windows2022-stig") repo = "Windows-2022-STIG"
+              else repo = toupper(role)
               cmd = sprintf("git ls-remote --exit-code --tags https://github.com/ansible-lockdown/%s.git refs/tags/%s", repo, ver)
               print "Validating " role " version " ver
               if (system(cmd) != 0) {
