@@ -21,7 +21,9 @@ if (!(Test-Path "C:\stig-pipe")) {
     git clone (Get-Location).Path "C:\stig-pipe"
 }
 
+# Change to repo directory and install Ansible roles
 Set-Location "C:\stig-pipe"
+ansible-galaxy install -r ansible\requirements.yml --roles-path roles\
 
 # Execute remediation pipeline
 Write-Host "Getting SCAP content..."

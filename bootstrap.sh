@@ -25,7 +25,9 @@ if [[ ! -d /opt/stig-pipe ]]; then
     sudo chown -R "$(whoami):$(whoami)" /opt/stig-pipe
 fi
 
+# Change to repo directory and install Ansible roles
 cd /opt/stig-pipe
+ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
 
 # Get SCAP content
 echo "Getting SCAP content..."
