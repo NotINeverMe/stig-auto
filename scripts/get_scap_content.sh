@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+usage() {
+    echo "Usage: $0 [--os <os_id>]" >&2
+    echo "  --os  Override detected OS (e.g. rhel8, ubuntu22, windows2022)" >&2
+}
+
 # Parse command line arguments
 OS_ID=""
 while [[ $# -gt 0 ]]; do
@@ -10,8 +15,13 @@ while [[ $# -gt 0 ]]; do
             OS_ID="$2"
             shift 2
             ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
         *)
-            echo "Unknown option: $1"
+            echo "Unknown option: $1" >&2
+            usage
             exit 1
             ;;
     esac
@@ -21,9 +31,10 @@ done
 if [[ -z "$OS_ID" ]]; then
     if [[ -f /etc/os-release ]]; then
         source /etc/os-release
-        OS_ID="${ID}-${VERSION_ID}"
+        VERSION_MAJOR="${VERSION_ID%%.*}"
+        OS_ID="${ID}${VERSION_MAJOR}"
     else
-        echo "Error: Cannot determine OS. Use --os parameter or ensure /etc/os-release exists."
+        echo "Error: Cannot determine OS. Use --os parameter or ensure /etc/os-release exists." >&2
         exit 1
     fi
 fi
@@ -48,7 +59,12 @@ fi
 # Fallback to SCAP Security Guide GitHub releases
 echo "Falling back to SCAP Security Guide GitHub releases..."
 GITHUB_API="https://api.github.com/repos/ComplianceAsCode/content/releases/latest"
-DOWNLOAD_URL=$(curl -s "$GITHUB_API" | grep -o '"browser_download_url": "[^"]*' | grep -o '[^"]*$' | head -1)
+# Find asset matching the OS ID
+DOWNLOAD_URL=$(curl -s "$GITHUB_API" \
+    | grep -o '"browser_download_url": "[^"]*' \
+    | cut -d'"' -f4 \
+    | grep -i "$OS_ID" \
+    | head -n 1)
 
 if [[ -n "$DOWNLOAD_URL" ]]; then
     echo "Downloading from: $DOWNLOAD_URL"

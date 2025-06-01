@@ -1,10 +1,20 @@
+[CmdletBinding()]
 param(
-    [string]$OS = $null
+    # Override detected OS (e.g. rhel8, ubuntu22, windows2022)
+    [string]$OS
 )
 
 # Default: get OS from system
 if (-not $OS) {
-    $OS = (Get-CimInstance Win32_OperatingSystem).Caption
+    $caption = (Get-CimInstance Win32_OperatingSystem).Caption
+    if ($caption -match '(\d{4})') {
+        $OSID = "windows$($Matches[1])"
+    } else {
+        throw "Unable to determine Windows version from '$caption'"
+    }
+    $OS = $OSID
+} else {
+    $OSID = $OS
 }
 
 # Create scap_content directory
@@ -12,7 +22,7 @@ New-Item -ItemType Directory -Force -Path "scap_content" | Out-Null
 
 # Generate filename with current quarter
 $CurrentDate = Get-Date -Format "yyyy-MM"
-$SafeOS = $OS -replace '[^\w\-]', '-'
+$SafeOS = $OSID -replace '[^\w\-]', '-'
 $Filename = "scap_content\$SafeOS-$CurrentDate.xml"
 
 Write-Host "Fetching SCAP content for $OS..."
@@ -29,7 +39,8 @@ try {
     Write-Host "Falling back to SCAP Security Guide GitHub releases..."
     $GitHubApi = "https://api.github.com/repos/ComplianceAsCode/content/releases/latest"
     $Release = Invoke-RestMethod -Uri $GitHubApi
-    $DownloadUrl = $Release.assets[0].browser_download_url
+    $Asset = $Release.assets | Where-Object { $_.name -match $OSID } | Select-Object -First 1
+    $DownloadUrl = $Asset.browser_download_url
     
     if ($DownloadUrl) {
         Write-Host "Downloading from: $DownloadUrl"

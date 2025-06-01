@@ -28,10 +28,12 @@ iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.
 Clone the repo, install roles, fetch SCAP content, then run:
 
 ```bash
+./scripts/get_scap_content.sh [--os rhel8]
 ./scripts/scan.sh --baseline
 ansible-playbook ansible/remediate.yml -t CAT_I,CAT_II
 ./scripts/verify.sh
 ```
+Use `--os` (Linux) or `-OS` (Windows) to override automatic OS detection when downloading SCAP content.
 
 ## Updates
 
