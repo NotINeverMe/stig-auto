@@ -2,6 +2,11 @@
 
 Automated STIG remediation pipeline using OpenSCAP and Ansible.
 
+This project is not an official STIG tool. It automates portions of the
+scanning and remediation process, but you must manually review the results
+for accuracy. Some scripts pull resources from the internet, which may not be
+appropriate for all environments, particularly those without online access.
+
 ## Quick Start
 
 ### Linux
