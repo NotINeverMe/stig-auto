@@ -2,17 +2,40 @@
 
 set -euo pipefail
 
+# Parse arguments
+DRY_RUN=false
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+run_cmd() {
+    if $DRY_RUN; then
+        echo "[DRY-RUN] $*"
+    else
+        "$@"
+    fi
+}
+
 # Detect package manager and install dependencies
 if command -v apt &> /dev/null; then
     echo "Detected apt package manager"
-    sudo apt update
-    sudo apt install -y git curl ansible openscap-scanner
+    run_cmd sudo apt update
+    run_cmd sudo apt install -y git curl ansible openscap-scanner
 elif command -v dnf &> /dev/null; then
     echo "Detected dnf package manager"
-    sudo dnf install -y git curl ansible openscap-scanner
+    run_cmd sudo dnf install -y git curl ansible openscap-scanner
 elif command -v yum &> /dev/null; then
     echo "Detected yum package manager"
-    sudo yum install -y git curl ansible openscap-scanner
+    run_cmd sudo yum install -y git curl ansible openscap-scanner
 else
     echo "Error: No supported package manager found (apt, dnf, or yum)"
     exit 1
@@ -21,28 +44,28 @@ fi
 # Clone repo to /opt/stig-pipe if not already present
 if [[ ! -d /opt/stig-pipe ]]; then
     echo "Cloning repository to /opt/stig-pipe"
-    sudo git clone https://github.com/NotINeverMe/stig-auto.git /opt/stig-pipe
-    sudo chown -R "$(whoami):$(whoami)" /opt/stig-pipe
+    run_cmd sudo git clone https://github.com/NotINeverMe/stig-auto.git /opt/stig-pipe
+    run_cmd sudo chown -R "$(whoami):$(whoami)" /opt/stig-pipe
 fi
 
 # Change to repo directory and install Ansible roles
-cd /opt/stig-pipe
-ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
+run_cmd cd /opt/stig-pipe
+run_cmd ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
 
 # Get SCAP content
 echo "Getting SCAP content..."
-./scripts/get_scap_content.sh
+run_cmd ./scripts/get_scap_content.sh
 
 # Run baseline scan
 echo "Running baseline scan..."
-./scripts/scan.sh --baseline
+run_cmd ./scripts/scan.sh --baseline
 
 # Run Ansible remediation
 echo "Running Ansible remediation..."
-ansible-playbook ansible/remediate.yml -t CAT_I,CAT_II
+run_cmd ansible-playbook ansible/remediate.yml -t CAT_I,CAT_II
 
 # Verify remediation
 echo "Verifying remediation..."
-./scripts/verify.sh
+run_cmd ./scripts/verify.sh
 
 echo "Remediation complete"
