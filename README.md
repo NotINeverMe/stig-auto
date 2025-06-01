@@ -46,4 +46,9 @@ ansible-galaxy install -r ansible/requirements.yml --roles-path roles/ --force
 - Ubuntu 22.04
 - Windows Server 2022
 
+## Output
+
+Reports are saved in the `reports/` directory:
+- `report-baseline-*.html` - Pre-remediation compliance status
+- `report-after-*.html` - Post-remediation verification
 Reports appear under `reports/` with before and after HTML summaries.
