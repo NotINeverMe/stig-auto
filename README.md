@@ -21,6 +21,14 @@ curl -fsSL https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstra
 iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1)
 ```
 
+After cloning the repository or running the bootstrap script, install the Ansible roles:
+
+```bash
+ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
+```
+
+This pulls the STIG roles from the Git repositories specified in `ansible/requirements.yml`.
+
 ## Overview
 
 1. Download SCAP content
