@@ -22,10 +22,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ansible
-      - name: Validate rhel8-stig tag
+      - name: Validate role versions exist
         run: |
-          TAG="$(awk '/rhel8-stig/{getline; getline; print $2}' ansible/requirements.yml | tr -d '"')"
-          git ls-remote --exit-code --tags https://github.com/ansible-lockdown/RHEL8-STIG.git "refs/tags/$TAG"
+          awk '/^ *- name:/{role=$3} /^ *version:/{ver=$2; gsub(/["\'\']/, "", ver);
+               cmd=sprintf("git ls-remote --exit-code --tags https://github.com/ansible-lockdown/%s.git refs/tags/%s", toupper(role) ".git", ver);
+               system(cmd)}' ansible/requirements.yml
       - name: Install Ansible roles
         run: |
           ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
