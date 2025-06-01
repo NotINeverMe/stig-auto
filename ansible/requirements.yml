@@ -7,5 +7,5 @@ roles:
     src: git+https://github.com/ansible-lockdown/UBUNTU22-STIG.git
     version: "1.0.0"
   - name: windows2022-stig
-    src: git+https://github.com/ansible-lockdown/WINDOWS2022-STIG.git
-    version: v1.4.0
+    src: git+https://github.com/ansible-lockdown/Windows-2022-STIG.git
+    version: "1.0.0"
