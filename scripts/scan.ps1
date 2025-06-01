@@ -12,6 +12,27 @@ if (-not $Baseline -and -not $After) {
 
 $Mode = if ($Baseline) { "baseline" } else { "after" }
 
+# Determine default STIG profile based on OS
+$DefaultProfile = 'xccdf_org.ssgproject.content_profile_stig'
+if (Test-Path '/etc/os-release') {
+    $idLine = Select-String -Path '/etc/os-release' -Pattern '^ID=' | Select-Object -First 1
+    if ($idLine) {
+        $id = ($idLine.Line -replace '^ID=', '').Trim('"')
+        switch ($id) {
+            'rhel' { $DefaultProfile = 'xccdf_org.ssgproject.content_profile_stig' }
+            'ubuntu' { $DefaultProfile = 'xccdf_org.ssgproject.content_profile_stig' }
+        }
+    }
+} else {
+    $caption = (Get-CimInstance Win32_OperatingSystem).Caption
+    if ($caption -match 'Windows') {
+        $DefaultProfile = 'xccdf_org.ssgproject.content_profile_stig'
+    }
+}
+
+# Allow override via environment variable
+$STIG_PROFILE_ID = if ($env:STIG_PROFILE_ID) { $env:STIG_PROFILE_ID } else { $DefaultProfile }
+
 # Create reports directory
 New-Item -ItemType Directory -Force -Path "reports" | Out-Null
 
@@ -35,7 +56,7 @@ try {
     $ReportFile = "reports\report-$Mode-$Timestamp.html"
     
     & oscap.exe xccdf eval `
-        --profile stig `
+        --profile $STIG_PROFILE_ID `
         --results $ResultsFile `
         --report $ReportFile `
         $ScapFile.FullName
