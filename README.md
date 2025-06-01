@@ -40,6 +40,23 @@ git pull
 ansible-galaxy install -r ansible/requirements.yml --roles-path roles/ --force
 ```
 
+## Offline Preparation
+
+You can stage content on a machine with internet access and then copy it to an
+offline target.
+
+```bash
+# Fetch Ansible roles
+ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
+
+# Download SCAP content for the desired OS
+./scripts/get_scap_content.sh --os rhel-8
+```
+
+Transfer the `roles/` and `scap_content/` directories to the offline system
+before running the pipeline. The `--os` flag tells `get_scap_content.sh` exactly
+which content to download.
+
 ## Supported Systems
 
 - RHEL 8
