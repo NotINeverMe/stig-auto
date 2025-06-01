@@ -25,6 +25,13 @@ run_cmd() {
     fi
 }
 
+# Create a placeholder reports directory when running in dry-run mode so that
+# CI pipelines expecting artifacts have something to upload.
+if $DRY_RUN; then
+    mkdir -p reports
+    : > reports/dry-run.txt
+fi
+
 # Detect package manager and install dependencies
 if command -v apt &> /dev/null; then
     echo "Detected apt package manager"
