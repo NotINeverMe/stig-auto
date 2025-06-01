@@ -7,13 +7,13 @@ Automated Security Technical Implementation Guide (STIG) remediation pipeline us
 ### Run on Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR-ORG/stig-pipe/main/bootstrap.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.sh | sudo bash
 ```
 
 ### Run on Windows
 
 ```powershell
-iex (irm https://raw.githubusercontent.com/YOUR-ORG/stig-pipe/main/bootstrap.ps1)
+iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1)
 ```
 
 ## What This Does
@@ -34,8 +34,8 @@ This pipeline focuses on Category I (Critical) and Category II (High) findings f
 
 ```bash
 # Clone repository
-git clone https://github.com/YOUR-ORG/stig-pipe.git
-cd stig-pipe
+git clone https://github.com/NotINeverMe/stig-auto.git
+cd stig-auto
 
 # Install Ansible roles
 ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
