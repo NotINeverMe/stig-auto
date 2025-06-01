@@ -41,7 +41,7 @@ This pulls the STIG roles from the Git repositories specified in `ansible/requir
 Clone the repo, install roles, fetch SCAP content, then run:
 
 ```bash
-./scripts/get_scap_content.sh [--os rhel8]
+./scripts/get_scap_content.sh [--os rhel-8]
 ./scripts/scan.sh --baseline
 ansible-playbook ansible/remediate.yml -t CAT_I,CAT_II
 ./scripts/verify.sh
@@ -102,7 +102,6 @@ which content to download.
 Reports are saved in the `reports/` directory:
 - `report-baseline-*.html` - Pre-remediation compliance status
 - `report-after-*.html` - Post-remediation verification
-Reports appear under `reports/` with before and after HTML summaries.
 
 ## Exit Codes
 
