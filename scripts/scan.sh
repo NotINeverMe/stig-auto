@@ -67,12 +67,19 @@ fi
 echo "Using SCAP content: $SCAP_FILE"
 echo "Running $MODE scan..."
 
-# Run OpenSCAP evaluation
+
+# Run OpenSCAP evaluation and capture the exit code. OpenSCAP returns
+# exit code 2 when rules fail but the scan itself succeeded, so the
+# script should continue in that case.
+rc=0
 oscap xccdf eval \
     --profile "$STIG_PROFILE_ID" \
     --results "reports/results-${MODE}-${TIMESTAMP}.arf" \
     --report "reports/report-${MODE}-${TIMESTAMP}.html" \
-    "$SCAP_FILE"
+    "$SCAP_FILE" || rc=$?
+if [[ $rc -ne 0 && $rc -ne 2 ]]; then
+    exit $rc
+fi
 
 echo "Scan complete. Results saved to:"
 echo "  ARF: reports/results-${MODE}-${TIMESTAMP}.arf"
