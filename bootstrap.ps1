@@ -49,7 +49,10 @@ if (!(Get-Command choco -ErrorAction SilentlyContinue)) {
 }
 
 # Install required packages
-Run 'choco install git ansible openscap -y'
+Run 'choco install git python openscap-scanner -y'
+Run 'refreshenv'
+Run 'python -m pip install --upgrade pip'
+Run 'python -m pip install ansible'
 
 # Clone repo to C:\stig-pipe if not present
 if (!(Test-Path "C:\stig-pipe")) {
