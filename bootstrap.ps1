@@ -58,19 +58,46 @@ if (!(Get-Command choco -ErrorAction SilentlyContinue)) {
 }
 
 # Install required packages
-Run 'choco install git openscap -y'
-Run 'choco install python --version 3.11.7 -y'
+Run 'choco install git -y'
+# Note: OpenSCAP Chocolatey package currently has issues, will install manually if needed
+Run 'choco install python -y --allow-downgrade'
 
 Run 'refreshenv'
-if ($env:Path -notlike '*C:\\Python311*') { $env:Path = 'C:\\Python311;' + $env:Path }
-Run 'C:\\Python311\\python.exe -m pip install --upgrade pip'
-Run 'C:\\Python311\\python.exe -m pip install ansible'
 
-# Verify OpenSCAP is on the PATH only when commands are executed
+# Find Python installation dynamically
+$PythonCmd = $null
+if (Get-Command python -ErrorAction SilentlyContinue) {
+    $PythonCmd = 'python'
+} elseif (Get-Command py -ErrorAction SilentlyContinue) {
+    $PythonCmd = 'py'
+} else {
+    # Try common installation paths
+    $CommonPaths = @('C:\\Python311\\python.exe', 'C:\\Python312\\python.exe', 'C:\\Python313\\python.exe')
+    foreach ($Path in $CommonPaths) {
+        if (Test-Path $Path) {
+            $PythonCmd = $Path
+            break
+        }
+    }
+}
+
+if (-not $PythonCmd) {
+    Write-Error "Python installation not found"
+    exit 1
+}
+
+Write-Host "Using Python: $PythonCmd"
+Run "$PythonCmd -m pip install --upgrade pip"
+Run "$PythonCmd -m pip install ansible"
+
+# Check for OpenSCAP installation
 if (-not $DryRun) {
     if (!(Get-Command oscap.exe -ErrorAction SilentlyContinue)) {
-        Write-Error "oscap.exe not found in PATH after installation"
-        exit 1
+        Write-Warning "oscap.exe not found in PATH. Please install OpenSCAP manually:"
+        Write-Warning "1. Download from: https://github.com/OpenSCAP/openscap/releases"
+        Write-Warning "2. Or use: winget install OpenSCAP.OpenSCAP"
+        Write-Warning "3. Or try: choco install openscap --pre"
+        Write-Warning "Continuing without OpenSCAP - scan operations will fail"
     } else {
         $oscPath = (Get-Command oscap.exe).Source
         Write-Host "Using oscap.exe from $oscPath"
@@ -96,7 +123,42 @@ Write-Host "Running baseline scan..."
 Run '.\\scripts\\scan.ps1 -Baseline'
 
 Write-Host "Running Ansible remediation..."
-Run 'C:\\Python311\\Scripts\\ansible-playbook.exe ansible\remediate.yml -t CAT_I,CAT_II'
+# Use dynamic Python path for ansible-playbook
+$AnsiblePlaybook = $null
+if (Get-Command ansible-playbook -ErrorAction SilentlyContinue) {
+    $AnsiblePlaybook = 'ansible-playbook'
+} else {
+    # Try to find ansible-playbook in Python Scripts directory
+    if ($PythonCmd -and ($PythonCmd -like "*\*" -or $PythonCmd -like "*:*")) {
+        # Full path provided
+        $PythonDir = Split-Path $PythonCmd -Parent
+        $ScriptsDir = Join-Path $PythonDir "Scripts"
+        $AnsiblePath = Join-Path $ScriptsDir "ansible-playbook.exe"
+        if (Test-Path $AnsiblePath) {
+            $AnsiblePlaybook = $AnsiblePath
+        }
+    } else {
+        # Command name only, try to find the full path
+        $PythonFullPath = (Get-Command $PythonCmd -ErrorAction SilentlyContinue).Source
+        if ($PythonFullPath) {
+            $PythonDir = Split-Path $PythonFullPath -Parent
+            $ScriptsDir = Join-Path $PythonDir "Scripts"
+            $AnsiblePath = Join-Path $ScriptsDir "ansible-playbook.exe"
+            if (Test-Path $AnsiblePath) {
+                $AnsiblePlaybook = $AnsiblePath
+            }
+        }
+    }
+    
+    if (-not $AnsiblePlaybook -and -not $DryRun) {
+        Write-Error "ansible-playbook not found"
+        exit 1
+    } elseif (-not $AnsiblePlaybook -and $DryRun) {
+        $AnsiblePlaybook = "ansible-playbook"
+        Write-Host "Note: ansible-playbook not found, using placeholder for dry run"
+    }
+}
+Run "$AnsiblePlaybook ansible\remediate.yml -t CAT_I,CAT_II"
 
 Write-Host "Verifying remediation..."
 Run '.\\scripts\\verify.ps1'
