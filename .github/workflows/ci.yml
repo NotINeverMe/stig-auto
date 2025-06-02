@@ -72,11 +72,17 @@ jobs:
           python --version
           python -m pip install --upgrade pip
           python -m pip install "ansible-core>=2.17,<2.18"
-          # Set UTF-8 encoding for Ansible
+          # Force UTF-8 encoding for Ansible compatibility on Windows
           $env:PYTHONIOENCODING = "utf-8"
+          $env:PYTHONUTF8 = "1"
+          $env:LC_ALL = "C.UTF-8"
+          $env:LANG = "C.UTF-8" 
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          [Console]::InputEncoding = [System.Text.Encoding]::UTF8
           # Test that ansible can import without errors
           python -c "import ansible; print('Ansible version:', ansible.__version__)"
+          # Test with explicit UTF-8 environment
+          $env:ANSIBLE_STDOUT_CALLBACK = "minimal"
           ansible --version
       - name: Test SCAP content download
         shell: pwsh

@@ -41,6 +41,18 @@ function Get-StigProfile {
 $env:STIG_PROFILE = Get-StigProfile
 Write-Host "Detected STIG profile: $env:STIG_PROFILE"
 
+# Preflight check for Windows compatibility
+if ($PSVersionTable.PSEdition -eq 'Desktop' -and -not $env:WSL_DISTRO_NAME) {
+    Write-Warning @"
+WARNING: You are running on native Windows PowerShell.
+Ansible control nodes are officially supported on Linux/macOS only.
+For best results, consider using WSL2 (Ubuntu 22.04):
+  wsl --install -d Ubuntu-22.04
+  
+Continuing with experimental Windows support...
+"@
+}
+
 if ($DryRun) {
     Write-Host "Dry run mode - commands will be printed only" -ForegroundColor Yellow
 }
@@ -110,9 +122,14 @@ if (-not $PythonCmd) {
 
 Write-Host "Using Python: $PythonCmd"
 
-# Set UTF-8 encoding for Ansible compatibility on Windows
+# Force UTF-8 encoding for Ansible compatibility on Windows
 $env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
+$env:LC_ALL = "C.UTF-8"
+$env:LANG = "C.UTF-8"
+$env:ANSIBLE_STDOUT_CALLBACK = "minimal"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
 
 Run "$PythonCmd -m pip install --upgrade pip"
 Run "$PythonCmd -m pip install 'ansible-core>=2.17,<2.18'"
