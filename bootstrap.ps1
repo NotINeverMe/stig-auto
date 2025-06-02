@@ -58,7 +58,8 @@ if (!(Get-Command choco -ErrorAction SilentlyContinue)) {
 }
 
 # Install required packages
-Run 'choco install git python openscap-scanner -y'
+Run 'choco install git openscap-scanner -y'
+Run 'choco install python --version 3.11.7 -y'
 Run 'refreshenv'
 Run 'python -m pip install --upgrade pip'
 Run 'python -m pip install ansible'
