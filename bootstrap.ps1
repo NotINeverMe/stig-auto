@@ -64,19 +64,41 @@ Run 'choco install python -y --allow-downgrade'
 
 Run 'refreshenv'
 
-# Find Python installation dynamically
+# Find Python installation dynamically, preferring Ansible-compatible versions
 $PythonCmd = $null
-if (Get-Command python -ErrorAction SilentlyContinue) {
-    $PythonCmd = 'python'
-} elseif (Get-Command py -ErrorAction SilentlyContinue) {
-    $PythonCmd = 'py'
-} else {
-    # Try common installation paths
-    $CommonPaths = @('C:\\Python311\\python.exe', 'C:\\Python312\\python.exe', 'C:\\Python313\\python.exe')
-    foreach ($Path in $CommonPaths) {
-        if (Test-Path $Path) {
-            $PythonCmd = $Path
-            break
+
+# First try specific Python versions that are known to work well with Ansible
+$PreferredPaths = @('C:\\Python312\\python.exe', 'C:\\Python311\\python.exe')
+foreach ($Path in $PreferredPaths) {
+    if (Test-Path $Path) {
+        $PythonCmd = $Path
+        Write-Host "Using preferred Python installation: $PythonCmd"
+        break
+    }
+}
+
+# If no preferred version found, try common commands
+if (-not $PythonCmd) {
+    if (Get-Command python -ErrorAction SilentlyContinue) {
+        $PythonVersion = (python --version 2>&1) -replace 'Python ', ''
+        if ($PythonVersion -like '3.11.*' -or $PythonVersion -like '3.12.*') {
+            $PythonCmd = 'python'
+            Write-Host "Using system Python (compatible version): $PythonVersion"
+        } else {
+            Write-Warning "System Python version $PythonVersion may have compatibility issues with Ansible"
+            $PythonCmd = 'python'
+        }
+    } elseif (Get-Command py -ErrorAction SilentlyContinue) {
+        $PythonCmd = 'py'
+    } else {
+        # Try any available Python installation as last resort
+        $AllPaths = @('C:\\Python313\\python.exe', 'C:\\Python314\\python.exe')
+        foreach ($Path in $AllPaths) {
+            if (Test-Path $Path) {
+                $PythonCmd = $Path
+                Write-Warning "Using Python 3.13+ which may have Ansible compatibility issues: $PythonCmd"
+                break
+            }
         }
     }
 }
