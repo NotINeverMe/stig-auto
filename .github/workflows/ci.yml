@@ -71,7 +71,7 @@ jobs:
         run: |
           python --version
           python -m pip install --upgrade pip
-          python -m pip install ansible
+          python -m pip install "ansible-core>=2.17,<2.18"
           # Set UTF-8 encoding for Ansible
           $env:PYTHONIOENCODING = "utf-8"
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -134,11 +134,11 @@ jobs:
         run: |
           python --version
           python -m pip install --upgrade pip
-          python -m pip install ansible
+          python -m pip install "ansible-core>=2.17,<2.18"
           # Set UTF-8 encoding for Ansible
           $env:PYTHONIOENCODING = "utf-8"
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          # This will likely fail on Python 3.13 due to os.get_blocking() issue
+          # Test compatibility - may fail due to os.get_blocking() Windows issues
           python -c "
           try:
               import ansible
@@ -146,12 +146,12 @@ jobs:
               import ansible.cli
               print('SUCCESS: Ansible CLI modules work on Python 3.13')
           except Exception as e:
-              print(f'EXPECTED FAILURE: Ansible compatibility issue on Python 3.13: {e}')
+              print(f'EXPECTED FAILURE: Ansible Windows compatibility issue: {e}')
               raise
           "
       - name: Document Python 3.13 status
         shell: pwsh
         run: |
           Write-Host "Python 3.13 compatibility test completed."
-          Write-Host "If this job shows failures, it confirms known Ansible compatibility issues with Python 3.13."
-          Write-Host "The bootstrap script should handle this gracefully by using an older Python version."
+          Write-Host "If this job shows failures, it confirms known Ansible Windows compatibility issues."
+          Write-Host "The bootstrap script uses ansible-core 2.17.x which should work better on Windows."

@@ -115,7 +115,7 @@ $env:PYTHONIOENCODING = "utf-8"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 Run "$PythonCmd -m pip install --upgrade pip"
-Run "$PythonCmd -m pip install ansible"
+Run "$PythonCmd -m pip install 'ansible-core>=2.17,<2.18'"
 
 # Check for OpenSCAP installation
 if (-not $DryRun) {
