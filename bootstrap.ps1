@@ -129,12 +129,28 @@ if (Get-Command ansible-playbook -ErrorAction SilentlyContinue) {
     $AnsiblePlaybook = 'ansible-playbook'
 } else {
     # Try to find ansible-playbook in Python Scripts directory
-    $PythonDir = Split-Path $PythonCmd -Parent
-    $ScriptsDir = Join-Path $PythonDir "Scripts"
-    $AnsiblePath = Join-Path $ScriptsDir "ansible-playbook.exe"
-    if (Test-Path $AnsiblePath) {
-        $AnsiblePlaybook = $AnsiblePath
+    if ($PythonCmd -and ($PythonCmd -like "*\*" -or $PythonCmd -like "*:*")) {
+        # Full path provided
+        $PythonDir = Split-Path $PythonCmd -Parent
+        $ScriptsDir = Join-Path $PythonDir "Scripts"
+        $AnsiblePath = Join-Path $ScriptsDir "ansible-playbook.exe"
+        if (Test-Path $AnsiblePath) {
+            $AnsiblePlaybook = $AnsiblePath
+        }
     } else {
+        # Command name only, try to find the full path
+        $PythonFullPath = (Get-Command $PythonCmd -ErrorAction SilentlyContinue).Source
+        if ($PythonFullPath) {
+            $PythonDir = Split-Path $PythonFullPath -Parent
+            $ScriptsDir = Join-Path $PythonDir "Scripts"
+            $AnsiblePath = Join-Path $ScriptsDir "ansible-playbook.exe"
+            if (Test-Path $AnsiblePath) {
+                $AnsiblePlaybook = $AnsiblePath
+            }
+        }
+    }
+    
+    if (-not $AnsiblePlaybook) {
         Write-Error "ansible-playbook not found"
         exit 1
     }
