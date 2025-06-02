@@ -1,17 +1,26 @@
 #Requires -RunAsAdministrator
 
+
 [CmdletBinding()]
 param(
     [switch]$DryRun
 )
 
+# Directory for pipeline logs and summary report
+$LogDir = "C:\stig"
+$LogFile = Join-Path $LogDir "pipeline.log"
+$EndReport = Join-Path $LogDir "end_report.txt"
+# Repository directory used throughout the script
+$RepoDir = "C:\stig-pipe"
+New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
+Start-Transcript -Path $LogFile -Append | Out-Null
+
 function Run {
     param(
         [string]$Command
     )
-    if ($DryRun) {
-        Write-Host $Command
-    } else {
+    Write-Host "==> $Command"
+    if (-not $DryRun) {
         Invoke-Expression $Command
     }
 }
@@ -54,14 +63,14 @@ Run 'refreshenv'
 Run 'python -m pip install --upgrade pip'
 Run 'python -m pip install ansible'
 
-# Clone repo to C:\stig-pipe if not present
-if (!(Test-Path "C:\stig-pipe")) {
+# Clone repo to the repository directory if not present
+if (!(Test-Path $RepoDir)) {
     Write-Host "Cloning repository to C:\stig-pipe"
-    Run 'git clone https://github.com/NotINeverMe/stig-auto.git "C:\stig-pipe"'
+    Run "git clone https://github.com/NotINeverMe/stig-auto.git \"$RepoDir\""
 }
 
 # Change to repo directory and install Ansible roles
-Run 'Set-Location "C:\stig-pipe"'
+Run "Set-Location \"$RepoDir\""
 Run 'ansible-galaxy install -r ansible\requirements.yml --roles-path roles\'
 
 # Execute remediation pipeline
@@ -78,3 +87,16 @@ Write-Host "Verifying remediation..."
 Run '& scripts\verify.ps1'
 
 Write-Host "Remediation complete" -ForegroundColor Green
+
+# Stop logging and create summary report
+Stop-Transcript | Out-Null
+$ReportsDir = Join-Path $RepoDir "reports"
+$BaselineReport = $null
+$AfterReport = $null
+if (Test-Path $ReportsDir) {
+    $BaselineReport = Get-ChildItem -Path $ReportsDir -Filter "report-baseline-*.html" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    $AfterReport = Get-ChildItem -Path $ReportsDir -Filter "report-after-*.html" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+}
+"Remediation completed $(Get-Date)" | Out-File -FilePath $EndReport
+if ($BaselineReport) { "Baseline report: $($BaselineReport.FullName)" | Out-File -FilePath $EndReport -Append }
+if ($AfterReport) { "After remediation report: $($AfterReport.FullName)" | Out-File -FilePath $EndReport -Append }
