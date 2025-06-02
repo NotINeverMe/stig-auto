@@ -5,13 +5,19 @@ param(
     [switch]$DryRun
 )
 
+# Directory for pipeline logs and summary report
+$LogDir = "C:\stig"
+$LogFile = Join-Path $LogDir "pipeline.log"
+$EndReport = Join-Path $LogDir "end_report.txt"
+New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
+Start-Transcript -Path $LogFile -Append | Out-Null
+
 function Run {
     param(
         [string]$Command
     )
-    if ($DryRun) {
-        Write-Host $Command
-    } else {
+    Write-Host "==> $Command"
+    if (-not $DryRun) {
         Invoke-Expression $Command
     }
 }
@@ -78,3 +84,11 @@ Write-Host "Verifying remediation..."
 Run '& scripts\verify.ps1'
 
 Write-Host "Remediation complete" -ForegroundColor Green
+
+# Stop logging and create summary report
+Stop-Transcript | Out-Null
+$BaselineReport = Get-ChildItem -Path "reports" -Filter "report-baseline-*.html" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$AfterReport = Get-ChildItem -Path "reports" -Filter "report-after-*.html" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+"Remediation completed $(Get-Date)" | Out-File -FilePath $EndReport
+if ($BaselineReport) { "Baseline report: $($BaselineReport.FullName)" | Out-File -FilePath $EndReport -Append }
+if ($AfterReport) { "After remediation report: $($AfterReport.FullName)" | Out-File -FilePath $EndReport -Append }
