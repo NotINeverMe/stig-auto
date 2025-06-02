@@ -24,6 +24,16 @@ ansible-playbook ansible/remediate.yml --check
 ./scripts/verify.sh
 ```
 
+```powershell
+# Dry run bootstrap (Windows)
+.\bootstrap.ps1 -DryRun
+
+# Test individual components
+.\scripts\get_scap_content.ps1 -OS windows2022
+.\scripts\scan.ps1 -Baseline
+.\scripts\verify.ps1
+```
+
 ### Ansible Operations
 ```bash
 # Install/update roles
@@ -37,11 +47,46 @@ ansible-playbook ansible/remediate.yml -t CAT_II
 ansible-playbook ansible/remediate.yml --check
 ```
 
+### Development and CI/CD
+```bash
+# Run linting
+shellcheck $(git ls-files '*.sh')
+
+# Validate Ansible syntax
+ansible-playbook ansible/remediate.yml --syntax-check
+
+# Test full pipeline
+sudo bash bootstrap.sh --dry-run
+```
+
 ### Git Operations
 ```bash
 # Tag new releases
 git tag v0.x.x
 git push origin v0.x.x
+```
+
+### Environment Variables
+```bash
+# Override default STIG profile
+export STIG_PROFILE_ID="xccdf_org.ssgproject.content_profile_ospp"
+export STIG_PROFILE="ubuntu22"  # For Ansible playbook targeting
+```
+
+### Troubleshooting
+```bash
+# Verify OpenSCAP installation
+oscap --version
+
+# Validate SCAP content files
+oscap info scap_content/*.xml
+
+# List available profiles in SCAP content
+oscap info --profiles scap_content/*.xml
+
+# View recent scan reports
+ls -la reports/
+find reports -name "*.html" -mtime -1
 ```
 
 ## Architecture

@@ -41,6 +41,18 @@ function Get-StigProfile {
 $env:STIG_PROFILE = Get-StigProfile
 Write-Host "Detected STIG profile: $env:STIG_PROFILE"
 
+# Preflight check for Windows compatibility
+if ($PSVersionTable.PSEdition -eq 'Desktop' -and -not $env:WSL_DISTRO_NAME) {
+    Write-Warning @"
+WARNING: You are running on native Windows PowerShell.
+Ansible control nodes are officially supported on Linux/macOS only.
+For best results, consider using WSL2 (Ubuntu 22.04):
+  wsl --install -d Ubuntu-22.04
+  
+Continuing with experimental Windows support...
+"@
+}
+
 if ($DryRun) {
     Write-Host "Dry run mode - commands will be printed only" -ForegroundColor Yellow
 }
@@ -64,19 +76,41 @@ Run 'choco install python -y --allow-downgrade'
 
 Run 'refreshenv'
 
-# Find Python installation dynamically
+# Find Python installation dynamically, preferring Ansible-compatible versions
 $PythonCmd = $null
-if (Get-Command python -ErrorAction SilentlyContinue) {
-    $PythonCmd = 'python'
-} elseif (Get-Command py -ErrorAction SilentlyContinue) {
-    $PythonCmd = 'py'
-} else {
-    # Try common installation paths
-    $CommonPaths = @('C:\\Python311\\python.exe', 'C:\\Python312\\python.exe', 'C:\\Python313\\python.exe')
-    foreach ($Path in $CommonPaths) {
-        if (Test-Path $Path) {
-            $PythonCmd = $Path
-            break
+
+# First try specific Python versions that are known to work well with Ansible
+$PreferredPaths = @('C:\\Python312\\python.exe', 'C:\\Python311\\python.exe')
+foreach ($Path in $PreferredPaths) {
+    if (Test-Path $Path) {
+        $PythonCmd = $Path
+        Write-Host "Using preferred Python installation: $PythonCmd"
+        break
+    }
+}
+
+# If no preferred version found, try common commands
+if (-not $PythonCmd) {
+    if (Get-Command python -ErrorAction SilentlyContinue) {
+        $PythonVersion = (python --version 2>&1) -replace 'Python ', ''
+        if ($PythonVersion -like '3.11.*' -or $PythonVersion -like '3.12.*') {
+            $PythonCmd = 'python'
+            Write-Host "Using system Python (compatible version): $PythonVersion"
+        } else {
+            Write-Warning "System Python version $PythonVersion may have compatibility issues with Ansible"
+            $PythonCmd = 'python'
+        }
+    } elseif (Get-Command py -ErrorAction SilentlyContinue) {
+        $PythonCmd = 'py'
+    } else {
+        # Try any available Python installation as last resort
+        $AllPaths = @('C:\\Python313\\python.exe', 'C:\\Python314\\python.exe')
+        foreach ($Path in $AllPaths) {
+            if (Test-Path $Path) {
+                $PythonCmd = $Path
+                Write-Warning "Using Python 3.13+ which may have Ansible compatibility issues: $PythonCmd"
+                break
+            }
         }
     }
 }
@@ -87,8 +121,18 @@ if (-not $PythonCmd) {
 }
 
 Write-Host "Using Python: $PythonCmd"
+
+# Force UTF-8 encoding for Ansible compatibility on Windows
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
+$env:LC_ALL = "C.UTF-8"
+$env:LANG = "C.UTF-8"
+$env:ANSIBLE_STDOUT_CALLBACK = "minimal"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
+
 Run "$PythonCmd -m pip install --upgrade pip"
-Run "$PythonCmd -m pip install ansible"
+Run "$PythonCmd -m pip install 'ansible-core>=2.17,<2.18'"
 
 # Check for OpenSCAP installation
 if (-not $DryRun) {

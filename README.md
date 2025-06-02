@@ -7,24 +7,44 @@ scanning and remediation process, but you must manually review the results
 for accuracy. Some scripts pull resources from the internet, which may not be
 appropriate for all environments, particularly those without online access.
 
+## Platform Support
+
+**Supported Control Nodes:**
+- Ubuntu 22.04 / Debian 12 / AlmaLinux 9 (Python 3.10-3.12) ✅ **Recommended**
+- Windows 10/11 with WSL2 (Ubuntu 22.04) ✅ **Recommended**
+- Native Windows 10/11 ⚠️ **Experimental** (see limitations below)
+
+**Important:** Ansible officially supports Linux/macOS control nodes only. Native Windows support is experimental and may have compatibility issues.
+
 ## Quick Start
 
-### Linux
+### Linux/WSL2
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.sh | sudo bash
 ```
 
-### Windows
+### WSL2 Setup (Recommended for Windows users)
+
+```powershell
+# In Windows PowerShell (as Administrator)
+wsl --install -d Ubuntu-22.04
+
+# Then in WSL2 Ubuntu
+curl -fsSL https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.sh | sudo bash
+```
+
+### Native Windows (Experimental)
 
 ```powershell
 iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1)
 ```
 
-The Windows bootstrap script installs **Python 3.11** and uses `pip` to fetch
-Ansible, avoiding issues with the older Chocolatey package. The pipeline
-requires Python 3.11; using Python 3.13 may result in an `OSError` when running
-Ansible.
+**Windows Limitations:**
+- Uses ansible-core 2.17.x for compatibility
+- Requires aggressive UTF-8 encoding configuration
+- May have locale encoding issues
+- OpenSCAP installation often fails on Windows
 
 After cloning the repository or running the bootstrap script, install the Ansible roles:
 
