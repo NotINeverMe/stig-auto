@@ -44,7 +44,7 @@ This pulls the STIG roles from the Git repositories specified in `ansible/requir
 Clone the repo, install roles, fetch SCAP content, then run:
 
 ```bash
-./scripts/get_scap_content.sh [--os rhel-8]
+./scripts/get_scap_content.sh [--os rhel8]
 ./scripts/scan.sh --baseline
 ansible-playbook ansible/remediate.yml -t CAT_I,CAT_II
 ./scripts/verify.sh
@@ -87,7 +87,7 @@ offline target.
 ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
 
 # Download SCAP content for the desired OS
-./scripts/get_scap_content.sh --os rhel-8
+./scripts/get_scap_content.sh --os rhel8
 ```
 
 Transfer the `roles/` and `scap_content/` directories to the offline system
