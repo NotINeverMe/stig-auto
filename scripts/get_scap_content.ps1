@@ -37,24 +37,36 @@ try {
         $ZipFile = "scap_content\windows2022-v2r4.zip"
         
         try {
-            Invoke-WebRequest -Uri $NistUrl -OutFile $ZipFile
+            $response = Invoke-WebRequest -Uri $NistUrl -OutFile $ZipFile -PassThru
             
-            # Extract the ZIP file
-            $ExtractPath = "scap_content\windows2022"
-            New-Item -ItemType Directory -Force -Path $ExtractPath | Out-Null
-            Expand-Archive -Path $ZipFile -DestinationPath $ExtractPath -Force
+            # Check if we got a ZIP file or HTML page
+            $fileBytes = [System.IO.File]::ReadAllBytes($ZipFile)
+            $isZip = ($fileBytes.Length -gt 4 -and 
+                     $fileBytes[0] -eq 0x50 -and $fileBytes[1] -eq 0x4B -and 
+                     ($fileBytes[2] -eq 0x03 -or $fileBytes[2] -eq 0x05))
             
-            # Find the SCAP XML file
-            $ScapFile = Get-ChildItem -Path $ExtractPath -Filter "*.xml" -Recurse | Select-Object -First 1
-            if ($ScapFile) {
-                Copy-Item $ScapFile.FullName $Filename
-                Write-Host "SCAP content saved to: $Filename"
-                Remove-Item $ZipFile -Force
-                $DownloadUrl = $NistUrl  # Mark as successful
+            if ($isZip) {
+                # Extract the ZIP file
+                $ExtractPath = "scap_content\windows2022"
+                New-Item -ItemType Directory -Force -Path $ExtractPath | Out-Null
+                Expand-Archive -Path $ZipFile -DestinationPath $ExtractPath -Force
+                
+                # Find the SCAP XML file
+                $ScapFile = Get-ChildItem -Path $ExtractPath -Filter "*.xml" -Recurse | Select-Object -First 1
+                if ($ScapFile) {
+                    Copy-Item $ScapFile.FullName $Filename
+                    Write-Host "SCAP content saved to: $Filename"
+                    Remove-Item $ZipFile -Force
+                    $DownloadUrl = $NistUrl  # Mark as successful
+                }
+            } else {
+                Write-Warning "NIST returned HTML page instead of ZIP file (possibly access restricted)"
+                Remove-Item $ZipFile -Force -ErrorAction SilentlyContinue
             }
         }
         catch {
             Write-Warning "NIST download failed: $_"
+            Remove-Item $ZipFile -Force -ErrorAction SilentlyContinue
         }
     }
     
