@@ -109,6 +109,11 @@ if (-not $PythonCmd) {
 }
 
 Write-Host "Using Python: $PythonCmd"
+
+# Set UTF-8 encoding for Ansible compatibility on Windows
+$env:PYTHONIOENCODING = "utf-8"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
 Run "$PythonCmd -m pip install --upgrade pip"
 Run "$PythonCmd -m pip install ansible"
 

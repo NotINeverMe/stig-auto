@@ -72,6 +72,9 @@ jobs:
           python --version
           python -m pip install --upgrade pip
           python -m pip install ansible
+          # Set UTF-8 encoding for Ansible
+          $env:PYTHONIOENCODING = "utf-8"
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           # Test that ansible can import without errors
           python -c "import ansible; print('Ansible version:', ansible.__version__)"
           ansible --version
@@ -132,6 +135,9 @@ jobs:
           python --version
           python -m pip install --upgrade pip
           python -m pip install ansible
+          # Set UTF-8 encoding for Ansible
+          $env:PYTHONIOENCODING = "utf-8"
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           # This will likely fail on Python 3.13 due to os.get_blocking() issue
           python -c "
           try:
