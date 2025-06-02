@@ -42,6 +42,22 @@ fi
 # Create scap_content directory
 mkdir -p scap_content
 
+# Map OS IDs to release asset patterns
+case "${OS_ID}" in
+    rhel8)
+        ASSET_PATTERN="rhel8"
+        ;;
+    ubuntu22|ubuntu2204)
+        ASSET_PATTERN="ubuntu-22\\.04|ubuntu2204"
+        ;;
+    windows2022)
+        ASSET_PATTERN="windows-server-2022|windows2022"
+        ;;
+    *)
+        ASSET_PATTERN="${OS_ID}"
+        ;;
+esac
+
 # Generate filename with current date
 CURRENT_DATE=$(date +"%Y-%m")
 FILENAME="scap_content/${OS_ID}-${CURRENT_DATE}.xml"
@@ -59,11 +75,11 @@ fi
 # Fallback to SCAP Security Guide GitHub releases
 echo "Falling back to SCAP Security Guide GitHub releases..."
 GITHUB_API="https://api.github.com/repos/ComplianceAsCode/content/releases/latest"
-# Find asset matching the OS ID
+# Find asset matching the OS pattern
 DOWNLOAD_URL=$(curl -s "$GITHUB_API" \
     | grep -o '"browser_download_url": "[^"]*' \
     | cut -d'"' -f4 \
-    | grep -i "$OS_ID" \
+    | grep -Ei "$ASSET_PATTERN" \
     | head -n 1)
 
 if [[ -n "$DOWNLOAD_URL" ]]; then

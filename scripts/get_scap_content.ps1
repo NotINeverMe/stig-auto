@@ -38,8 +38,19 @@ try {
     # Fallback to SCAP Security Guide GitHub releases
     Write-Host "Falling back to SCAP Security Guide GitHub releases..."
     $GitHubApi = "https://api.github.com/repos/ComplianceAsCode/content/releases/latest"
-    $Release = Invoke-RestMethod -Uri $GitHubApi
-    $Asset = $Release.assets | Where-Object { $_.name -match $OSID } | Select-Object -First 1
+$Release = Invoke-RestMethod -Uri $GitHubApi
+
+switch ($OSID.ToLower()) {
+    'rhel8' {
+        $assetPattern = 'rhel8'
+    }
+    'ubuntu22' { $assetPattern = 'ubuntu-22\.04|ubuntu2204' }
+    'ubuntu2204' { $assetPattern = 'ubuntu-22\.04|ubuntu2204' }
+    'windows2022' { $assetPattern = 'windows-server-2022|windows2022' }
+    Default { $assetPattern = [Regex]::Escape($OSID) }
+}
+
+$Asset = $Release.assets | Where-Object { $_.name -match $assetPattern } | Select-Object -First 1
     $DownloadUrl = $Asset.browser_download_url
     
     if ($DownloadUrl) {
