@@ -54,3 +54,13 @@ jobs:
         with:
           name: reports
           path: reports/
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run Windows bootstrap in dry-run mode
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy Bypass -Scope Process -Force
+          ./bootstrap.ps1 -DryRun

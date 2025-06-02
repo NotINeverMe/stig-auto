@@ -21,6 +21,9 @@ curl -fsSL https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstra
 iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1)
 ```
 
+The Windows bootstrap script installs Python and uses `pip` to fetch Ansible,
+avoiding issues with the older Chocolatey package.
+
 After cloning the repository or running the bootstrap script, install the Ansible roles:
 
 ```bash
