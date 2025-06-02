@@ -150,9 +150,12 @@ if (Get-Command ansible-playbook -ErrorAction SilentlyContinue) {
         }
     }
     
-    if (-not $AnsiblePlaybook) {
+    if (-not $AnsiblePlaybook -and -not $DryRun) {
         Write-Error "ansible-playbook not found"
         exit 1
+    } elseif (-not $AnsiblePlaybook -and $DryRun) {
+        $AnsiblePlaybook = "ansible-playbook"
+        Write-Host "Note: ansible-playbook not found, using placeholder for dry run"
     }
 }
 Run "$AnsiblePlaybook ansible\remediate.yml -t CAT_I,CAT_II"
