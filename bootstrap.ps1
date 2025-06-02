@@ -60,9 +60,11 @@ if (!(Get-Command choco -ErrorAction SilentlyContinue)) {
 # Install required packages
 Run 'choco install git openscap -y'
 Run 'choco install python --version 3.11.7 -y'
+
 Run 'refreshenv'
-Run 'python -m pip install --upgrade pip'
-Run 'python -m pip install ansible'
+if ($env:Path -notlike '*C:\\Python311*') { $env:Path = 'C:\\Python311;' + $env:Path }
+Run 'C:\\Python311\\python.exe -m pip install --upgrade pip'
+Run 'C:\\Python311\\python.exe -m pip install ansible'
 
 # Verify OpenSCAP is on the PATH only when commands are executed
 if (-not $DryRun) {
@@ -82,21 +84,22 @@ if (!(Test-Path $RepoDir)) {
 }
 
 # Change to repo directory and install Ansible roles
-Run "Set-Location \"$RepoDir\""
+Run "Set-Location -Path $RepoDir"
 Run 'ansible-galaxy install -r ansible\requirements.yml --roles-path roles\'
+
 
 # Execute remediation pipeline
 Write-Host "Getting SCAP content..."
-Run '& scripts\get_scap_content.ps1'
+Run '.\\scripts\\get_scap_content.ps1'
 
 Write-Host "Running baseline scan..."
-Run '& scripts\scan.ps1 -Baseline'
+Run '.\\scripts\\scan.ps1 -Baseline'
 
 Write-Host "Running Ansible remediation..."
-Run 'ansible-playbook ansible\remediate.yml -t CAT_I,CAT_II'
+Run 'C:\\Python311\\Scripts\\ansible-playbook.exe ansible\remediate.yml -t CAT_I,CAT_II'
 
 Write-Host "Verifying remediation..."
-Run '& scripts\verify.ps1'
+Run '.\\scripts\\verify.ps1'
 
 Write-Host "Remediation complete" -ForegroundColor Green
 
