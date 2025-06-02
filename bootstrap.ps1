@@ -72,21 +72,22 @@ if (!(Test-Path $RepoDir)) {
 }
 
 # Change to repo directory and install Ansible roles
-Run "Set-Location \"$RepoDir\""
-Run 'C:\\Python311\\Scripts\\ansible-galaxy.exe install -r ansible\requirements.yml --roles-path roles\\'
+Run "Set-Location -Path $RepoDir"
+Run 'ansible-galaxy install -r ansible\requirements.yml --roles-path roles\'
+
 
 # Execute remediation pipeline
 Write-Host "Getting SCAP content..."
-Run '& scripts\get_scap_content.ps1'
+Run '.\\scripts\\get_scap_content.ps1'
 
 Write-Host "Running baseline scan..."
-Run '& scripts\scan.ps1 -Baseline'
+Run '.\\scripts\\scan.ps1 -Baseline'
 
 Write-Host "Running Ansible remediation..."
 Run 'C:\\Python311\\Scripts\\ansible-playbook.exe ansible\remediate.yml -t CAT_I,CAT_II'
 
 Write-Host "Verifying remediation..."
-Run '& scripts\verify.ps1'
+Run '.\\scripts\\verify.ps1'
 
 Write-Host "Remediation complete" -ForegroundColor Green
 
