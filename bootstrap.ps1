@@ -58,11 +58,18 @@ if (!(Get-Command choco -ErrorAction SilentlyContinue)) {
 }
 
 # Install required packages
-Run 'choco install git openscap-scanner -y'
+Run 'choco install git openscap -y'
 Run 'choco install python --version 3.11.7 -y'
 Run 'refreshenv'
 Run 'python -m pip install --upgrade pip'
 Run 'python -m pip install ansible'
+if (!(Get-Command oscap.exe -ErrorAction SilentlyContinue)) {
+    Write-Error "oscap.exe not found in PATH after installation"
+    exit 1
+} else {
+    $oscPath = (Get-Command oscap.exe).Source
+    Write-Host "Using oscap.exe from $oscPath"
+}
 
 # Clone repo to the repository directory if not present
 if (!(Test-Path $RepoDir)) {
