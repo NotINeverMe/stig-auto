@@ -22,10 +22,10 @@
   ansible.windows.win_powershell:
     script: |
       $ErrorActionPreference = 'Stop'
-      
+
       # Import the hardening script
       . C:\Windows\Temp\Invoke-WindowsHardening.ps1
-      
+
       # Execute with specified parameters
       $params = @{
         Mode = '{{ windows_hardening_mode }}'
@@ -33,7 +33,7 @@
         LogPath = '{{ windows_hardening_log_path }}'
         ReportPath = '{{ windows_hardening_report_path }}'
       }
-      
+
       Invoke-WindowsHardening @params
   register: hardening_result
   failed_when: false

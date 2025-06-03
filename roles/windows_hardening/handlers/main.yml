@@ -1,12 +1,12 @@
 ---
 # Handlers for Windows hardening role
 
-- name: restart computer
+- name: Restart computer
   ansible.windows.win_reboot:
     reboot_timeout: 600
   listen: "restart windows"
 
-- name: restart windows firewall
+- name: Restart Windows firewall
   ansible.windows.win_service:
     name: MpsSvc
     state: restarted

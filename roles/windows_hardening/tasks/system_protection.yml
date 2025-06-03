@@ -13,16 +13,16 @@
       Set-MpPreference -DisablePrivacyMode $false
       Set-MpPreference -DisableScriptScanning $false
       Set-MpPreference -DisableArchiveScanning $false
-      
+
       # Configure cloud protection
       Set-MpPreference -MAPSReporting Advanced
       Set-MpPreference -SubmitSamplesConsent SendAllSamples
       Set-MpPreference -CloudBlockLevel High
       Set-MpPreference -CloudExtendedTimeout 50
-      
+
       # Enable PUA protection
       Set-MpPreference -PUAProtection Enabled
-      
+
       # Enable network protection
       Set-MpPreference -EnableNetworkProtection Enabled
   when: windows_hardening_enable_defender | bool
@@ -55,7 +55,7 @@
   ansible.windows.win_updates:
     category_names: "{{ windows_hardening_update_categories }}"
     state: installed
-    reboot: no
+    reboot: false
   when: windows_hardening_install_updates | bool
   register: update_result
   tags:
@@ -100,7 +100,15 @@
   ansible.windows.win_powershell:
     script: |
       # Create default AppLocker policy
-      $xml = '<AppLockerPolicy Version="1"><RuleCollection Type="Exe" EnforcementMode="Enabled"><FilePathRule Id="921cc481-6e17-4653-8f75-050b80acca20" Name="Allow Program Files" UserOrGroupSid="S-1-1-0" Action="Allow"><Conditions><FilePathCondition Path="%PROGRAMFILES%\*" /></Conditions></FilePathRule><FilePathRule Id="a61c8b2c-a319-4cd0-9690-d2177cad7b51" Name="Allow Windows" UserOrGroupSid="S-1-1-0" Action="Allow"><Conditions><FilePathCondition Path="%WINDIR%\*" /></Conditions></FilePathRule><FilePathRule Id="fd686d83-a829-4351-8ff4-27c7de5755d2" Name="Allow Administrators" UserOrGroupSid="S-1-5-32-544" Action="Allow"><Conditions><FilePathCondition Path="*" /></Conditions></FilePathRule></RuleCollection></AppLockerPolicy>'
+      $xml = '<AppLockerPolicy Version="1">' +
+             '<RuleCollection Type="Exe" EnforcementMode="Enabled">' +
+             '<FilePathRule Id="921cc481-6e17-4653-8f75-050b80acca20" Name="Allow Program Files" UserOrGroupSid="S-1-1-0" Action="Allow">' +
+             '<Conditions><FilePathCondition Path="%PROGRAMFILES%\*" /></Conditions></FilePathRule>' +
+             '<FilePathRule Id="a61c8b2c-a319-4cd0-9690-d2177cad7b51" Name="Allow Windows" UserOrGroupSid="S-1-1-0" Action="Allow">' +
+             '<Conditions><FilePathCondition Path="%WINDIR%\*" /></Conditions></FilePathRule>' +
+             '<FilePathRule Id="fd686d83-a829-4351-8ff4-27c7de5755d2" Name="Allow Administrators" UserOrGroupSid="S-1-5-32-544" Action="Allow">' +
+             '<Conditions><FilePathCondition Path="*" /></Conditions></FilePathRule>' +
+             '</RuleCollection></AppLockerPolicy>'
       $tempFile = "$env:TEMP\AppLockerPolicy.xml"
       Set-Content -Path $tempFile -Value $xml
       Set-AppLockerPolicy -XmlPolicy $tempFile
@@ -121,7 +129,7 @@
         "5BEB7EFE-FD9A-4556-801D-275E5FFC04CC" = 1  # Block obfuscated scripts
         "92E97FA1-2EDF-4476-BDD6-9DD0B4DDDC7B" = 1  # Block Win32 API calls from Office
       }
-      
+
       foreach ($rule in $asrRules.GetEnumerator()) {
         Add-MpPreference -AttackSurfaceReductionRules_Ids $rule.Key -AttackSurfaceReductionRules_Actions $rule.Value
       }
@@ -134,10 +142,10 @@
   ansible.windows.win_powershell:
     script: |
       Set-MpPreference -EnableControlledFolderAccess Enabled
-      
+
       # Add protected folders
-      @("$env:USERPROFILE\Documents", "$env:USERPROFILE\Desktop", "C:\Windows\System32\LogBackups") | 
-        Where-Object { Test-Path $_ } | 
+      @("$env:USERPROFILE\Documents", "$env:USERPROFILE\Desktop", "C:\Windows\System32\LogBackups") |
+        Where-Object { Test-Path $_ } |
         ForEach-Object { Add-MpPreference -ControlledFolderAccessProtectedFolders $_ }
   when: windows_hardening_enable_defender | bool
   tags:
@@ -147,8 +155,8 @@
   ansible.windows.win_feature:
     name: BitLocker
     state: present
-    include_sub_features: yes
-    include_management_tools: yes
+    include_sub_features: true
+    include_management_tools: true
   when: windows_hardening_enable_bitlocker | bool
   register: bitlocker_feature
   tags:
@@ -159,21 +167,21 @@
     script: |
       $systemDrive = $env:SystemDrive
       $bitlockerStatus = Get-BitLockerVolume -MountPoint $systemDrive -ErrorAction SilentlyContinue
-      
+
       if ($bitlockerStatus -and $bitlockerStatus.ProtectionStatus -eq 'On') {
         Write-Host "BitLocker already enabled on system drive"
         exit 0
       }
-      
+
       # Enable BitLocker with TPM
       Enable-BitLocker -MountPoint $systemDrive -EncryptionMethod Aes256 -UsedSpaceOnly -TpmProtector
-      
+
       # Add recovery password
       Add-BitLockerKeyProtector -MountPoint $systemDrive -RecoveryPasswordProtector
-      
+
       # Start encryption
       Resume-BitLocker -MountPoint $systemDrive
-  when: 
+  when:
     - windows_hardening_enable_bitlocker | bool
     - bitlocker_feature is succeeded
   register: bitlocker_result

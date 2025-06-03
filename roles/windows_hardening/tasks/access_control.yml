@@ -21,7 +21,9 @@
 - name: Configure account lockout policy
   ansible.windows.win_powershell:
     script: |
-      net accounts /lockoutthreshold:{{ windows_hardening_account_lockout_threshold }} /lockoutwindow:{{ windows_hardening_account_lockout_duration }} /lockoutduration:{{ windows_hardening_account_lockout_duration }}
+      net accounts /lockoutthreshold:{{ windows_hardening_account_lockout_threshold }} `
+        /lockoutwindow:{{ windows_hardening_account_lockout_duration }} `
+        /lockoutduration:{{ windows_hardening_account_lockout_duration }}
   tags:
     - nist_3.5.7
 
@@ -100,7 +102,7 @@
         Write-Warning "Computer is not domain-joined. Skipping LAPS installation."
         exit 0
       }
-      
+
       $lapsInstalled = Get-WmiObject -Query "SELECT * FROM Win32_Product WHERE Name LIKE '%Local Administrator Password Solution%'"
       if (!$lapsInstalled) {
         $lapsUrl = "https://download.microsoft.com/download/C/7/A/C7AAD914-A8A6-4904-88A1-29E657445D03/LAPS.x64.msi"
@@ -127,7 +129,7 @@
     - { name: 'PasswordComplexity', data: 4 }
     - { name: 'PasswordLength', data: "{{ windows_hardening_laps_password_length }}" }
     - { name: 'PasswordAgeDays', data: "{{ windows_hardening_laps_password_age }}" }
-  when: 
+  when:
     - windows_hardening_configure_laps | bool
     - laps_install is succeeded
   tags:

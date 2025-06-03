@@ -95,17 +95,17 @@
   ansible.windows.win_powershell:
     script: |
       Import-Module PowerSTIG
-      
+
       # Backup registry
       $backupPath = "$env:TEMP\PreSTIG_RegistryBackup_$(Get-Date -Format 'yyyyMMdd_HHmmss').reg"
       reg export HKLM $backupPath /y
-      
+
       # Apply STIG
       $stigPath = "$env:TEMP\STIG_Config"
       if (!(Test-Path $stigPath)) {
         New-Item -ItemType Directory -Path $stigPath -Force | Out-Null
       }
-      
+
       # Apply configuration based on OS version
       $osVersion = (Get-WmiObject Win32_OperatingSystem).Caption
       if ($osVersion -match "2022") {
