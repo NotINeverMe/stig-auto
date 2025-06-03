@@ -1,0 +1,74 @@
+---
+# Windows hardening role defaults
+
+# Hardening mode: Full, Essential, or Custom
+windows_hardening_mode: Essential
+
+# Enable dry run mode
+windows_hardening_dry_run: false
+
+# Logging configuration
+windows_hardening_log_path: 'C:\Windows\Temp\WindowsHardening.log'
+windows_hardening_report_path: 'C:\Windows\Temp\WindowsHardening_Report.html'
+
+# Security baseline settings
+windows_hardening_enable_firewall: true
+windows_hardening_enable_defender: true
+windows_hardening_enable_fips: true
+windows_hardening_enable_bitlocker: false  # Requires TPM
+
+# Password policy settings
+windows_hardening_password_length: 14
+windows_hardening_password_age_max: 60
+windows_hardening_password_age_min: 1
+windows_hardening_password_history: 24
+windows_hardening_account_lockout_threshold: 5
+windows_hardening_account_lockout_duration: 15
+
+# Audit settings
+windows_hardening_enable_audit: true
+windows_hardening_enable_powershell_logging: true
+windows_hardening_enable_command_line_auditing: true
+
+# Update settings
+windows_hardening_install_updates: true
+windows_hardening_update_categories:
+  - SecurityUpdates
+  - CriticalUpdates
+
+# STIG settings
+windows_hardening_apply_stig: true
+windows_hardening_stig_version: 'Windows_Server-2022-MS-3.1'
+
+# Device control
+windows_hardening_disable_usb_storage: true
+windows_hardening_block_removable_media: true
+
+# RDP settings
+windows_hardening_configure_rdp: true
+windows_hardening_rdp_nla_required: true
+windows_hardening_rdp_encryption_level: High
+
+# LAPS settings
+windows_hardening_configure_laps: false  # Requires domain
+windows_hardening_laps_password_length: 20
+windows_hardening_laps_password_age: 30
+
+# AppLocker settings
+windows_hardening_enable_applocker: false  # Can impact operations
+
+# Services to disable
+windows_hardening_services_to_disable:
+  - Fax
+  - RemoteRegistry
+  - TapiSrv
+  - Messenger
+  - Alerter
+  - ClipSrv
+  - Browser
+
+# Legacy protocols to disable
+windows_hardening_disable_legacy_protocols:
+  - SMBv1
+  - TLS1.0
+  - TLS1.1

@@ -37,7 +37,14 @@ curl -fsSL https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstra
 ### Native Windows (Experimental)
 
 ```powershell
+# Basic STIG remediation
 iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1)
+
+# With additional NIST 800-171 hardening
+iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1) -WindowsHardening
+
+# Full hardening mode (includes all security controls)
+iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1) -WindowsHardening -HardeningMode Full
 ```
 
 **Windows Features:**
@@ -45,6 +52,7 @@ iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.
 - No OpenSCAP dependency - pure PowerShell DSC
 - Automatic STIG content management
 - Native CKL file generation for STIG Viewer
+- **NEW**: NIST 800-171 rev2 compliance hardening modules
 
 After cloning the repository or running the bootstrap script, install the Ansible roles:
 
@@ -130,12 +138,45 @@ which content to download.
 - RHEL 8
 - Ubuntu 22.04
 - Windows Server 2022
+- Windows Server 2019 (PowerSTIG + NIST hardening)
+
+## Windows NIST 800-171 Hardening
+
+The Windows hardening module provides comprehensive security controls mapped to NIST 800-171 rev2:
+
+### Security Domains Covered
+
+- **Access Control** (3.1.x): User rights, authentication, RDP security, LAPS
+- **Audit & Accountability** (3.3.x): Comprehensive logging, event forwarding, log protection
+- **Configuration Management** (3.4.x): Baseline security, least functionality, AppLocker
+- **Identification & Authentication** (3.5.x): Password policies, MFA, account management
+- **System & Communications Protection** (3.13.x): Encryption, FIPS mode, firewall, protocols
+- **System & Information Integrity** (3.14.x): Anti-malware, updates, threat protection
+
+### Usage
+
+```powershell
+# Run hardening directly
+.\scripts\windows-hardening\Invoke-WindowsHardening.ps1 -Mode Essential
+
+# Or through Ansible
+ansible-playbook ansible\remediate.yml -t windows_hardening
+
+# Dry run mode to preview changes
+.\scripts\windows-hardening\Invoke-WindowsHardening.ps1 -Mode Essential -DryRun
+```
+
+### Hardening Modes
+
+- **Essential**: Core security controls (password policy, firewall, Windows Defender, audit logging)
+- **Full**: All controls including BitLocker, AppLocker, advanced threat protection
 
 ## Output
 
 Reports are saved in the `reports/` directory:
 - `report-baseline-*.html` - Pre-remediation compliance status
 - `report-after-*.html` - Post-remediation verification
+- `windows_hardening_report.html` - NIST 800-171 compliance status (when using -WindowsHardening)
 
 ## Exit Codes
 

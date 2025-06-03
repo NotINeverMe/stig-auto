@@ -1,0 +1,65 @@
+---
+# Compliance reporting tasks
+
+- name: Run compliance status check
+  ansible.windows.win_powershell:
+    script: |
+      # Import compliance module
+      Import-Module "{{ ansible_env.ProgramFiles }}\WindowsPowerShell\Modules\WindowsHardening\ComplianceReporting.psm1"
+
+      # Run compliance check
+      $complianceStatus = Test-ComplianceStatus
+
+      # Convert to JSON for Ansible
+      $complianceStatus | ConvertTo-Json -Depth 3
+  register: compliance_check
+  changed_when: false
+  tags:
+    - reporting
+
+- name: Generate compliance report
+  ansible.windows.win_powershell:
+    script: |
+      # Import compliance module
+      Import-Module "{{ ansible_env.ProgramFiles }}\WindowsPowerShell\Modules\WindowsHardening\ComplianceReporting.psm1"
+
+      # Count successes and failures from log
+      $logPath = "{{ windows_hardening_log_path }}"
+      $successCount = 0
+      $failureCount = 0
+
+      if (Test-Path $logPath) {
+        $logContent = Get-Content $logPath
+        $successCount = ($logContent | Select-String "SUCCESS:" | Measure-Object).Count
+        $failureCount = ($logContent | Select-String "FAILED:" | Measure-Object).Count
+      }
+
+      # Generate report
+      Export-ComplianceReport -ReportPath "{{ windows_hardening_report_path }}" -SuccessCount $successCount -FailureCount $failureCount
+  register: report_generation
+  tags:
+    - reporting
+
+- name: Copy compliance report to Ansible controller
+  ansible.builtin.fetch:
+    src: "{{ windows_hardening_report_path }}"
+    dest: "./reports/windows_hardening_{{ inventory_hostname }}_{{ ansible_date_time.epoch }}.html"
+    flat: true
+  when: report_generation is succeeded
+  tags:
+    - reporting
+
+- name: Display compliance summary
+  ansible.builtin.debug:
+    msg: |
+      Windows Hardening Compliance Summary:
+      =====================================
+      Mode: {{ windows_hardening_mode }}
+      Dry Run: {{ windows_hardening_dry_run }}
+
+      Compliance Status:
+      {{ compliance_check.stdout | from_json | to_nice_yaml }}
+
+      Report Location: {{ windows_hardening_report_path }}
+  tags:
+    - reporting

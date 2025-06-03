@@ -1,0 +1,165 @@
+---
+# Audit and logging configuration tasks
+# NIST 800-171 Controls: 3.3.1, 3.3.2, 3.3.4, 3.3.5, 3.3.8, 3.3.9
+
+- name: Configure audit policies
+  ansible.windows.win_audit_policy_system:
+    category: "{{ item.category }}"
+    subcategory: "{{ item.subcategory }}"
+    audit_type: "{{ item.audit_type }}"
+  loop:
+    - { category: 'Account Logon', subcategory: 'Credential Validation', audit_type: 'success, failure' }
+    - { category: 'Account Logon', subcategory: 'Other Account Logon Events', audit_type: 'success, failure' }
+    - { category: 'Account Management', subcategory: 'User Account Management', audit_type: 'success, failure' }
+    - { category: 'Account Management', subcategory: 'Security Group Management', audit_type: 'success, failure' }
+    - { category: 'Detailed Tracking', subcategory: 'Process Creation', audit_type: 'success' }
+    - { category: 'Logon/Logoff', subcategory: 'Logon', audit_type: 'success, failure' }
+    - { category: 'Logon/Logoff', subcategory: 'Special Logon', audit_type: 'success, failure' }
+    - { category: 'Object Access', subcategory: 'File System', audit_type: 'success, failure' }
+    - { category: 'Object Access', subcategory: 'Registry', audit_type: 'success, failure' }
+    - { category: 'Policy Change', subcategory: 'Audit Policy Change', audit_type: 'success, failure' }
+    - { category: 'Privilege Use', subcategory: 'Sensitive Privilege Use', audit_type: 'success, failure' }
+    - { category: 'System', subcategory: 'Security State Change', audit_type: 'success, failure' }
+    - { category: 'System', subcategory: 'System Integrity', audit_type: 'success, failure' }
+  tags:
+    - nist_3.3.1
+    - nist_3.3.2
+    - CAT_II
+
+- name: Enable PowerShell script block logging
+  ansible.windows.win_regedit:
+    path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging'
+    name: EnableScriptBlockLogging
+    data: 1
+    type: dword
+  when: windows_hardening_enable_powershell_logging | bool
+  tags:
+    - nist_3.3.1
+
+- name: Enable command line process auditing
+  ansible.windows.win_regedit:
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit'
+    name: ProcessCreationIncludeCmdLine_Enabled
+    data: 1
+    type: dword
+  when: windows_hardening_enable_command_line_auditing | bool
+  tags:
+    - nist_3.3.1
+
+- name: Configure Windows Event Log settings
+  ansible.windows.win_eventlog:
+    name: "{{ item.name }}"
+    maximum_size: "{{ item.size }}"
+    retention: 0  # Do not overwrite
+    state: present
+  loop:
+    - { name: 'Application', size: '1073741824' }      # 1GB
+    - { name: 'Security', size: '4294967296' }         # 4GB
+    - { name: 'System', size: '1073741824' }           # 1GB
+    - { name: 'Microsoft-Windows-PowerShell/Operational', size: '536870912' }  # 512MB
+  tags:
+    - nist_3.3.8
+
+- name: Create event log backup directory
+  ansible.windows.win_file:
+    path: 'C:\Windows\System32\LogBackups'
+    state: directory
+  tags:
+    - nist_3.3.8
+
+- name: Restrict access to log backup directory
+  ansible.windows.win_acl:
+    path: 'C:\Windows\System32\LogBackups'
+    user: "{{ item }}"
+    rights: FullControl
+    type: allow
+    inherit: ContainerInherit, ObjectInherit
+    propagation: None
+  loop:
+    - 'BUILTIN\Administrators'
+    - 'NT AUTHORITY\SYSTEM'
+  tags:
+    - nist_3.3.8
+    - nist_3.3.9
+
+- name: Enable Windows Event Forwarding service
+  ansible.windows.win_service:
+    name: Wecsvc
+    state: started
+    start_mode: auto
+  tags:
+    - nist_3.3.4
+
+- name: Configure Windows Event Collector
+  ansible.windows.win_powershell:
+    script: |
+      wecutil qc -quiet
+  failed_when: false
+  tags:
+    - nist_3.3.4
+
+- name: Create scheduled task for security log export
+  ansible.windows.win_scheduled_task:
+    name: Export-SecurityLogs
+    description: "Export security logs daily for backup and analysis"
+    actions:
+      - path: powershell.exe
+        arguments: >-
+          -NoProfile -ExecutionPolicy Bypass -Command
+          "$date = Get-Date -Format 'yyyyMMdd';
+          $exportPath = 'C:\Windows\System32\LogBackups\Security_$date.evtx';
+          wevtutil epl Security $exportPath;
+          Get-ChildItem 'C:\Windows\System32\LogBackups\*.evtx' -Recurse |
+          Where-Object {$_.LastWriteTime -lt (Get-Date).AddDays(-7)} |
+          ForEach-Object {
+            Compress-Archive -Path $_.FullName -DestinationPath \"$($_.FullName).zip\" -Force;
+            Remove-Item $_.FullName -Force
+          }"
+    triggers:
+      - type: daily
+        start_boundary: '2023-01-01T02:30:00'
+    username: SYSTEM
+    run_level: highest
+    enabled: true
+  tags:
+    - nist_3.3.4
+
+- name: Create audit failure monitoring task
+  ansible.windows.win_scheduled_task:
+    name: Monitor-AuditLogIntegrity
+    description: "Monitor audit log integrity and detect tampering"
+    actions:
+      - path: powershell.exe
+        arguments: >-
+          -NoProfile -ExecutionPolicy Bypass -Command
+          "$logPath = 'C:\Windows\System32\winevt\Logs';
+          $hashFile = 'C:\Windows\System32\LogBackups\LogHashes.csv';
+          $hashes = @();
+          Get-ChildItem \"$logPath\*.evtx\" | ForEach-Object {
+            $hash = Get-FileHash -Path $_.FullName -Algorithm SHA256;
+            $hashes += [PSCustomObject]@{
+              FileName = $_.Name;
+              Hash = $hash.Hash;
+              LastModified = $_.LastWriteTime
+            }
+          };
+          $hashes | Export-Csv -Path $hashFile -NoTypeInformation"
+    triggers:
+      - type: daily
+        start_boundary: '2023-01-01T03:00:00'
+        repetition:
+          interval: PT6H  # Every 6 hours
+    username: SYSTEM
+    run_level: highest
+    enabled: true
+  tags:
+    - nist_3.3.9
+
+- name: Configure audit failure response
+  ansible.windows.win_regedit:
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: CrashOnAuditFail
+    data: 0  # 0 = ignore, 1 = halt system, 2 = shutdown
+    type: dword
+  tags:
+    - nist_3.3.5

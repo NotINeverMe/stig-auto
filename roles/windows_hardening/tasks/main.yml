@@ -1,0 +1,80 @@
+---
+# Main tasks for Windows hardening role
+
+- name: Ensure PowerShell modules directory exists
+  ansible.windows.win_file:
+    path: '{{ ansible_env.ProgramFiles }}\WindowsPowerShell\Modules\WindowsHardening'
+    state: directory
+
+- name: Copy hardening PowerShell modules
+  ansible.windows.win_copy:
+    src: "{{ item }}"
+    dest: '{{ ansible_env.ProgramFiles }}\WindowsPowerShell\Modules\WindowsHardening\'
+  with_fileglob:
+    - "{{ playbook_dir }}/../scripts/windows-hardening/*.psm1"
+
+- name: Copy main hardening script
+  ansible.windows.win_copy:
+    src: "{{ playbook_dir }}/../scripts/windows-hardening/Invoke-WindowsHardening.ps1"
+    dest: 'C:\Windows\Temp\Invoke-WindowsHardening.ps1'
+
+- name: Execute Windows hardening script
+  ansible.windows.win_powershell:
+    script: |
+      $ErrorActionPreference = 'Stop'
+
+      # Import the hardening script
+      . C:\Windows\Temp\Invoke-WindowsHardening.ps1
+
+      # Execute with specified parameters
+      $params = @{
+        Mode = '{{ windows_hardening_mode }}'
+        DryRun = [bool]${{ windows_hardening_dry_run | lower }}
+        LogPath = '{{ windows_hardening_log_path }}'
+        ReportPath = '{{ windows_hardening_report_path }}'
+      }
+
+      Invoke-WindowsHardening @params
+  register: hardening_result
+  failed_when: false
+
+- name: Display hardening results
+  ansible.builtin.debug:
+    msg: "{{ hardening_result.stdout_lines }}"
+  when: hardening_result is defined
+
+# Include specific task files based on configuration
+- name: Include security baseline tasks
+  ansible.builtin.include_tasks: security_baseline.yml
+  when: windows_hardening_mode in ['Essential', 'Full']
+  tags:
+    - security_baseline
+    - CAT_II
+
+- name: Include access control tasks
+  ansible.builtin.include_tasks: access_control.yml
+  when: windows_hardening_mode in ['Essential', 'Full']
+  tags:
+    - access_control
+    - CAT_I
+
+- name: Include audit logging tasks
+  ansible.builtin.include_tasks: audit_logging.yml
+  when: windows_hardening_enable_audit | bool
+  tags:
+    - audit_logging
+    - CAT_II
+
+- name: Include system protection tasks
+  ansible.builtin.include_tasks: system_protection.yml
+  when: windows_hardening_mode == 'Full'
+  tags:
+    - system_protection
+    - CAT_I
+
+- name: Include compliance report tasks
+  ansible.builtin.include_tasks: compliance_report.yml
+  when: true
+  tags:
+    - reporting
+    - always

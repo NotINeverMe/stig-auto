@@ -3,7 +3,12 @@
 
 [CmdletBinding()]
 param(
-    [switch]$DryRun
+    [switch]$DryRun,
+    
+    [switch]$WindowsHardening,
+    
+    [ValidateSet('Full', 'Essential')]
+    [string]$HardeningMode = 'Essential'
 )
 
 # Directory for pipeline logs and summary report
@@ -154,6 +159,16 @@ if (-not $DryRun) {
             Write-Warning "Posh-STIG installation failed (optional module)"
         }
     }
+    
+    # Install PSWindowsUpdate for security update management
+    if (!(Get-Module -ListAvailable -Name PSWindowsUpdate)) {
+        try {
+            Install-Module -Name PSWindowsUpdate -Scope AllUsers -Force -AllowClobber
+            Write-Host "PSWindowsUpdate module installed successfully" -ForegroundColor Green
+        } catch {
+            Write-Warning "PSWindowsUpdate installation failed (used for update management)"
+        }
+    }
 }
 
 # Clone repo to the repository directory if not present
@@ -210,10 +225,42 @@ if (Get-Command ansible-playbook -ErrorAction SilentlyContinue) {
         Write-Host "Note: ansible-playbook not found, using placeholder for dry run"
     }
 }
-Run "$AnsiblePlaybook ansible\remediate.yml -t CAT_I,CAT_II"
+
+# Add tags for Windows hardening if requested
+$AnsibleTags = "CAT_I,CAT_II"
+if ($WindowsHardening) {
+    $AnsibleTags += ",windows_hardening,nist_compliance"
+}
+Run "$AnsiblePlaybook ansible\remediate.yml -t $AnsibleTags"
 
 Write-Host "Verifying remediation..."
 Run '.\\scripts\\verify.ps1'
+
+# Optional: Run standalone Windows hardening
+if ($WindowsHardening) {
+    Write-Host "Running additional Windows hardening for NIST 800-171 compliance..." -ForegroundColor Cyan
+    
+    # Copy hardening modules to PowerShell modules directory
+    $ModulePath = "$env:ProgramFiles\WindowsPowerShell\Modules\WindowsHardening"
+    if (-not (Test-Path $ModulePath)) {
+        Run "New-Item -ItemType Directory -Path '$ModulePath' -Force"
+    }
+    Run "Copy-Item -Path '.\scripts\windows-hardening\*.psm1' -Destination '$ModulePath' -Force"
+    
+    # Execute hardening script
+    $HardeningParams = @{
+        Mode = $HardeningMode
+        DryRun = $DryRun
+        LogPath = Join-Path $LogDir "windows_hardening.log"
+        ReportPath = Join-Path $LogDir "windows_hardening_report.html"
+    }
+    
+    if (-not $DryRun) {
+        & ".\scripts\windows-hardening\Invoke-WindowsHardening.ps1" @HardeningParams
+    } else {
+        Write-Host "Would execute: .\scripts\windows-hardening\Invoke-WindowsHardening.ps1 -Mode $HardeningMode -DryRun"
+    }
+}
 
 Write-Host "Remediation complete" -ForegroundColor Green
 

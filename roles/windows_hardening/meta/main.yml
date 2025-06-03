@@ -1,0 +1,20 @@
+---
+galaxy_info:
+  author: STIG Automation Team
+  description: Windows Server hardening for NIST 800-171 compliance
+  company: STIG Pipe
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Windows
+      versions:
+        - all
+  galaxy_tags:
+    - windows
+    - security
+    - hardening
+    - nist
+    - compliance
+    - stig
+
+dependencies: []

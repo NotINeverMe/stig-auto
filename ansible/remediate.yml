@@ -27,6 +27,16 @@
           tags:
             - CAT_I
             - CAT_II
+        
+        - name: Apply Windows hardening for NIST 800-171 compliance
+          include_role:
+            name: windows_hardening
+          vars:
+            windows_hardening_mode: "Essential"
+            windows_hardening_dry_run: false
+          tags:
+            - windows_hardening
+            - nist_compliance
     
     # For Linux systems, use traditional Ansible STIG roles
     - name: Apply Ansible STIG role on Linux

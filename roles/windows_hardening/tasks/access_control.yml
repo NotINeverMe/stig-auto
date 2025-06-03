@@ -1,0 +1,151 @@
+---
+# Access control and authentication tasks
+# NIST 800-171 Controls: 3.1.1, 3.1.2, 3.1.5, 3.1.13, 3.5.1, 3.5.2, 3.5.3, 3.5.7, 3.5.8
+
+- name: Configure password policy
+  ansible.windows.win_security_policy:
+    section: System Access
+    key: "{{ item.key }}"
+    value: "{{ item.value }}"
+  loop:
+    - { key: MinimumPasswordLength, value: "{{ windows_hardening_password_length }}" }
+    - { key: PasswordComplexity, value: 1 }
+    - { key: MinimumPasswordAge, value: "{{ windows_hardening_password_age_min }}" }
+    - { key: MaximumPasswordAge, value: "{{ windows_hardening_password_age_max }}" }
+    - { key: PasswordHistorySize, value: "{{ windows_hardening_password_history }}" }
+  tags:
+    - nist_3.5.7
+    - nist_3.5.8
+    - CAT_II
+
+- name: Configure account lockout policy
+  ansible.windows.win_powershell:
+    script: |
+      net accounts /lockoutthreshold:{{ windows_hardening_account_lockout_threshold }} `
+        /lockoutwindow:{{ windows_hardening_account_lockout_duration }} `
+        /lockoutduration:{{ windows_hardening_account_lockout_duration }}
+  tags:
+    - nist_3.5.7
+
+- name: Configure RDP security settings
+  ansible.windows.win_regedit:
+    path: "{{ item.path }}"
+    name: "{{ item.name }}"
+    data: "{{ item.data }}"
+    type: dword
+  loop:
+    - { path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server', name: 'fDenyTSConnections', data: 0 }
+    - { path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp', name: 'UserAuthentication', data: 1 }
+    - { path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp', name: 'MinEncryptionLevel', data: 3 }
+    - { path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp', name: 'fDisableClip', data: 1 }
+    - { path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp', name: 'fDisableCdm', data: 1 }
+  when: windows_hardening_configure_rdp | bool
+  tags:
+    - nist_3.1.13
+    - nist_3.13.5
+
+- name: Enable RDP firewall rule
+  ansible.windows.win_firewall_rule:
+    name: "Remote Desktop - User Mode (TCP-In)"
+    enabled: true
+    state: present
+    action: allow
+    direction: in
+    protocol: tcp
+    localport: 3389
+  when: windows_hardening_configure_rdp | bool
+  tags:
+    - nist_3.1.13
+
+- name: Disable Guest account
+  ansible.windows.win_user:
+    name: Guest
+    account_disabled: true
+  failed_when: false
+  tags:
+    - nist_3.1.1
+    - nist_3.1.2
+
+- name: Rename Administrator account
+  ansible.windows.win_powershell:
+    script: |
+      try {
+        $admin = Get-LocalUser -Name "Administrator" -ErrorAction SilentlyContinue
+        if ($admin) {
+          Rename-LocalUser -Name "Administrator" -NewName "LocalAdmin" -ErrorAction Stop
+        }
+      } catch {
+        Write-Warning "Could not rename Administrator account: $_"
+      }
+  failed_when: false
+  tags:
+    - nist_3.1.1
+
+- name: Configure Windows Hello for Business
+  ansible.windows.win_regedit:
+    path: 'HKLM:\SOFTWARE\Policies\Microsoft\PassportForWork'
+    name: "{{ item.name }}"
+    data: "{{ item.data }}"
+    type: dword
+  loop:
+    - { name: 'Enabled', data: 1 }
+    - { name: 'RequireSecurityDevice', data: 1 }
+    - { name: 'MinimumPINLength', data: 6 }
+  tags:
+    - nist_3.5.3
+
+- name: Install LAPS MSI if configured and domain joined
+  ansible.windows.win_powershell:
+    script: |
+      $computerSystem = Get-WmiObject Win32_ComputerSystem
+      if ($computerSystem.PartOfDomain -eq $false) {
+        Write-Warning "Computer is not domain-joined. Skipping LAPS installation."
+        exit 0
+      }
+
+      $lapsInstalled = Get-WmiObject -Query "SELECT * FROM Win32_Product WHERE Name LIKE '%Local Administrator Password Solution%'"
+      if (!$lapsInstalled) {
+        $lapsUrl = "https://download.microsoft.com/download/C/7/A/C7AAD914-A8A6-4904-88A1-29E657445D03/LAPS.x64.msi"
+        $lapsInstaller = "$env:TEMP\LAPS.x64.msi"
+        Invoke-WebRequest -Uri $lapsUrl -OutFile $lapsInstaller
+        Start-Process msiexec.exe -ArgumentList "/i `"$lapsInstaller`" /quiet" -Wait
+        Remove-Item $lapsInstaller -Force
+      }
+  when: windows_hardening_configure_laps | bool
+  register: laps_install
+  failed_when: false
+  tags:
+    - nist_3.5.1
+    - nist_3.5.2
+
+- name: Configure LAPS settings
+  ansible.windows.win_regedit:
+    path: 'HKLM:\SOFTWARE\Policies\Microsoft Services\AdmPwd'
+    name: "{{ item.name }}"
+    data: "{{ item.data }}"
+    type: dword
+  loop:
+    - { name: 'AdmPwdEnabled', data: 1 }
+    - { name: 'PasswordComplexity', data: 4 }
+    - { name: 'PasswordLength', data: "{{ windows_hardening_laps_password_length }}" }
+    - { name: 'PasswordAgeDays', data: "{{ windows_hardening_laps_password_age }}" }
+  when:
+    - windows_hardening_configure_laps | bool
+    - laps_install is succeeded
+  tags:
+    - nist_3.5.1
+    - nist_3.5.2
+
+- name: Configure user rights assignments
+  ansible.windows.win_user_right:
+    name: "{{ item.right }}"
+    users: "{{ item.users }}"
+    action: set
+  loop:
+    - { right: 'SeShutdownPrivilege', users: ['Administrators'] }
+    - { right: 'SeNetworkLogonRight', users: ['Administrators', 'Users'] }
+    - { right: 'SeDenyInteractiveLogonRight', users: ['Guest'] }
+  failed_when: false
+  tags:
+    - nist_3.1.5
+    - CAT_II

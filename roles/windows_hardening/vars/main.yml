@@ -1,0 +1,46 @@
+---
+# Variables for Windows hardening role
+
+# NIST control mappings for reference
+windows_hardening_nist_controls:
+  access_control:
+    - "3.1.1"  # Limit system access to authorized users
+    - "3.1.2"  # Limit system access to authorized processes
+    - "3.1.5"  # Employ principle of least privilege
+    - "3.1.13" # Employ cryptographic mechanisms for remote access
+    - "3.1.19" # Encrypt CUI on mobile devices
+    - "3.1.20" # Verify and control connections to external systems
+
+  audit_accountability:
+    - "3.3.1"  # Create and retain audit records
+    - "3.3.2"  # Ensure audit record capacity
+    - "3.3.4"  # Alert on audit logging process failures
+    - "3.3.5"  # Correlate audit record review
+    - "3.3.8"  # Protect audit information
+    - "3.3.9"  # Limit management of audit logging
+
+  configuration_management:
+    - "3.4.2"  # Establish and maintain baseline configurations
+    - "3.4.6"  # Employ principle of least functionality
+    - "3.4.7"  # Restrict nonessential programs
+    - "3.4.8"  # Apply deny-by-exception policy
+
+  identification_authentication:
+    - "3.5.1"  # Identify information system users
+    - "3.5.2"  # Authenticate users
+    - "3.5.3"  # Use multifactor authentication
+    - "3.5.7"  # Enforce minimum password complexity
+    - "3.5.8"  # Prohibit password reuse
+
+  system_communications_protection:
+    - "3.13.1"  # Monitor and control communications
+    - "3.13.5"  # Implement subnetworks
+    - "3.13.8"  # Implement cryptographic mechanisms
+    - "3.13.11" # Employ FIPS-validated cryptography
+    - "3.13.16" # Protect confidentiality of CUI at rest
+
+  system_information_integrity:
+    - "3.14.1"  # Identify and manage information system flaws
+    - "3.14.2"  # Provide protection from malicious code
+    - "3.14.6"  # Monitor organizational systems
+    - "3.14.7"  # Identify unauthorized use

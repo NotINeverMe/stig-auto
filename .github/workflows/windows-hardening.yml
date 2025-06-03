@@ -1,0 +1,176 @@
+name: Windows Hardening CI/CD
+
+on:
+  push:
+    branches: [ main, develop, feature/powerstig-windows-implementation ]
+    paths:
+      - 'scripts/windows-hardening/**'
+      - 'roles/windows-hardening/**'
+      - 'tests/windows/**'
+      - '.github/workflows/windows-hardening.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'scripts/windows-hardening/**'
+      - 'roles/windows-hardening/**'
+      - 'tests/windows/**'
+
+jobs:
+  test-powershell-modules:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Pester
+      shell: pwsh
+      run: |
+        Install-Module -Name Pester -Force -SkipPublisherCheck
+        Import-Module Pester
+    
+    - name: Run Pester tests
+      shell: pwsh
+      run: |
+        $config = New-PesterConfiguration
+        $config.Run.Path = "./tests/windows"
+        $config.Run.Exit = $true
+        $config.CodeCoverage.Enabled = $true
+        $config.CodeCoverage.Path = "./scripts/windows-hardening/*.ps*"
+        $config.TestResult.Enabled = $true
+        $config.TestResult.OutputPath = "./test-results.xml"
+        $config.TestResult.OutputFormat = "NUnitXml"
+        
+        Invoke-Pester -Configuration $config
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: test-results.xml
+    
+    - name: Test module imports
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        Get-ChildItem -Path "./scripts/windows-hardening/*.psm1" | ForEach-Object {
+          Write-Host "Testing import of module: $($_.Name)"
+          Import-Module $_.FullName -Force
+        }
+
+  test-ansible-syntax:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+    
+    - name: Install Ansible
+      run: |
+        python -m pip install --upgrade pip
+        pip install ansible ansible-lint
+    
+    - name: Validate Ansible syntax
+      run: |
+        ansible-playbook ansible/remediate.yml --syntax-check
+    
+    - name: Lint Ansible role
+      run: |
+        ansible-lint roles/windows_hardening/
+
+  integration-test:
+    runs-on: windows-2022
+    needs: [test-powershell-modules, test-ansible-syntax]
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run hardening in dry-run mode
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        
+        # Copy modules to expected location
+        $modulePath = "$env:ProgramFiles\WindowsPowerShell\Modules\WindowsHardening"
+        New-Item -ItemType Directory -Path $modulePath -Force
+        Copy-Item -Path "./scripts/windows-hardening/*.psm1" -Destination $modulePath -Force
+        
+        # Run in dry-run mode
+        & "./scripts/windows-hardening/Invoke-WindowsHardening.ps1" -Mode Essential -DryRun
+    
+    - name: Check compliance status
+      shell: pwsh
+      run: |
+        Import-Module "$env:ProgramFiles\WindowsPowerShell\Modules\WindowsHardening\ComplianceReporting.psm1"
+        $status = Test-ComplianceStatus
+        $status | Format-Table -AutoSize
+    
+    - name: Upload hardening logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: hardening-logs
+        path: |
+          C:\Windows\Temp\WindowsHardening.log
+          C:\Windows\Temp\WindowsHardening_Report.html
+
+  security-scan:
+    runs-on: windows-latest
+    needs: [test-powershell-modules]
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run PSScriptAnalyzer
+      shell: pwsh
+      run: |
+        Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck
+        Import-Module PSScriptAnalyzer
+        
+        # Only fail on Error severity, allow Warnings and Information
+        $results = Invoke-ScriptAnalyzer -Path "./scripts/windows-hardening" -Recurse -Severity Error
+        
+        if ($results) {
+          Write-Host "Critical PSScriptAnalyzer issues found:" -ForegroundColor Red
+          $results | Format-Table -AutoSize
+          throw "PSScriptAnalyzer found critical issues"
+        } else {
+          Write-Host "No critical PSScriptAnalyzer issues found" -ForegroundColor Green
+          
+          # Show summary of all issues for information
+          try {
+            $allResults = Invoke-ScriptAnalyzer -Path "./scripts/windows-hardening" -Recurse
+            if ($allResults) {
+              Write-Host "Summary of all PSScriptAnalyzer findings (for information only):" -ForegroundColor Yellow
+              $summary = $allResults | Group-Object Severity | Select-Object Name, Count
+              $summary | Format-Table -AutoSize
+            }
+          }
+          catch {
+            Write-Host "Could not generate summary report: $_" -ForegroundColor Yellow
+          }
+        }
+    
+    - name: Check for hardcoded secrets
+      shell: pwsh
+      run: |
+        $patterns = @(
+          "password\s*=\s*[`"`'][^`"`']+[`"`']",
+          "apikey\s*=\s*[`"`'][^`"`']+[`"`']",
+          "token\s*=\s*[`"`'][^`"`']+[`"`']"
+        )
+        
+        $found = $false
+        Get-ChildItem -Path "./scripts/windows-hardening" -Include "*.ps1","*.psm1" -Recurse | ForEach-Object {
+          $content = Get-Content $_.FullName -Raw
+          foreach ($pattern in $patterns) {
+            if ($content -match $pattern) {
+              Write-Warning "Potential hardcoded secret found in $($_.Name)"
+              $found = $true
+            }
+          }
+        }
+        
+        if ($found) {
+          throw "Potential hardcoded secrets detected"
+        }
