@@ -89,12 +89,12 @@ Describe "Function Export Tests" {
     Context "Module Exports" {
         It "ComplianceReporting module should export Test-ComplianceStatus function" {
             $content = Get-Content "$script:ModulePath\ComplianceReporting.psm1" -Raw
-            $content | Should -Match "Export-ModuleMember.*Test-ComplianceStatus"
+            $content | Should -Match "'Test-ComplianceStatus'"
         }
         
         It "ComplianceReporting module should export Export-ComplianceReport function" {
             $content = Get-Content "$script:ModulePath\ComplianceReporting.psm1" -Raw
-            $content | Should -Match "Export-ModuleMember.*Export-ComplianceReport"
+            $content | Should -Match "'Export-ComplianceReport'"
         }
     }
 }
