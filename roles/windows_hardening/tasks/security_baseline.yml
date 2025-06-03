@@ -75,7 +75,7 @@
     state: stopped
     start_mode: disabled
   loop: "{{ windows_hardening_services_to_disable }}"
-  ignore_errors: true
+  failed_when: false
   tags:
     - nist_3.4.6
     - nist_3.4.7
@@ -115,7 +115,7 @@
       }
   when: windows_hardening_apply_stig | bool
   register: stig_result
-  ignore_errors: true
+  failed_when: false
   tags:
     - nist_3.12.1
     - nist_3.12.2

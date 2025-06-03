@@ -30,7 +30,7 @@
         
         - name: Apply Windows hardening for NIST 800-171 compliance
           include_role:
-            name: windows-hardening
+            name: windows_hardening
           vars:
             windows_hardening_mode: "Essential"
             windows_hardening_dry_run: false

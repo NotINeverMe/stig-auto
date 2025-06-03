@@ -94,7 +94,7 @@
   ansible.windows.win_powershell:
     script: |
       wecutil qc -quiet
-  ignore_errors: true
+  failed_when: false
   tags:
     - nist_3.3.4
 
@@ -120,7 +120,7 @@
         start_boundary: '2023-01-01T02:30:00'
     username: SYSTEM
     run_level: highest
-    enabled: yes
+    enabled: true
   tags:
     - nist_3.3.4
 
@@ -151,7 +151,7 @@
           interval: PT6H  # Every 6 hours
     username: SYSTEM
     run_level: highest
-    enabled: yes
+    enabled: true
   tags:
     - nist_3.3.9
 

@@ -50,7 +50,7 @@
     - reporting
 
 - name: Display compliance summary
-  debug:
+  ansible.builtin.debug:
     msg: |
       Windows Hardening Compliance Summary:
       =====================================

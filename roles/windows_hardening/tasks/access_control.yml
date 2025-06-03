@@ -45,7 +45,7 @@
 - name: Enable RDP firewall rule
   ansible.windows.win_firewall_rule:
     name: "Remote Desktop - User Mode (TCP-In)"
-    enabled: yes
+    enabled: true
     state: present
     action: allow
     direction: in
@@ -58,8 +58,8 @@
 - name: Disable Guest account
   ansible.windows.win_user:
     name: Guest
-    account_disabled: yes
-  ignore_errors: true
+    account_disabled: true
+  failed_when: false
   tags:
     - nist_3.1.1
     - nist_3.1.2
@@ -75,7 +75,7 @@
       } catch {
         Write-Warning "Could not rename Administrator account: $_"
       }
-  ignore_errors: true
+  failed_when: false
   tags:
     - nist_3.1.1
 
@@ -111,7 +111,7 @@
       }
   when: windows_hardening_configure_laps | bool
   register: laps_install
-  ignore_errors: true
+  failed_when: false
   tags:
     - nist_3.5.1
     - nist_3.5.2
@@ -143,7 +143,7 @@
     - { right: 'SeShutdownPrivilege', users: ['Administrators'] }
     - { right: 'SeNetworkLogonRight', users: ['Administrators', 'Users'] }
     - { right: 'SeDenyInteractiveLogonRight', users: ['Guest'] }
-  ignore_errors: true
+  failed_when: false
   tags:
     - nist_3.1.5
     - CAT_II

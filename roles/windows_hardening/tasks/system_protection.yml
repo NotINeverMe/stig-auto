@@ -47,7 +47,7 @@
     script: |
       Update-MpSignature -ErrorAction SilentlyContinue
   when: windows_hardening_enable_defender | bool
-  ignore_errors: true
+  failed_when: false
   tags:
     - nist_3.14.2
 
@@ -100,21 +100,7 @@
   ansible.windows.win_powershell:
     script: |
       # Create default AppLocker policy
-      $xml = @'
-      <AppLockerPolicy Version="1">
-        <RuleCollection Type="Exe" EnforcementMode="Enabled">
-          <FilePathRule Id="921cc481-6e17-4653-8f75-050b80acca20" Name="Allow Program Files" UserOrGroupSid="S-1-1-0" Action="Allow">
-            <Conditions><FilePathCondition Path="%PROGRAMFILES%\*" /></Conditions>
-          </FilePathRule>
-          <FilePathRule Id="a61c8b2c-a319-4cd0-9690-d2177cad7b51" Name="Allow Windows" UserOrGroupSid="S-1-1-0" Action="Allow">
-            <Conditions><FilePathCondition Path="%WINDIR%\*" /></Conditions>
-          </FilePathRule>
-          <FilePathRule Id="fd686d83-a829-4351-8ff4-27c7de5755d2" Name="Allow Administrators" UserOrGroupSid="S-1-5-32-544" Action="Allow">
-            <Conditions><FilePathCondition Path="*" /></Conditions>
-          </FilePathRule>
-        </RuleCollection>
-      </AppLockerPolicy>
-'@
+      $xml = '<AppLockerPolicy Version="1"><RuleCollection Type="Exe" EnforcementMode="Enabled"><FilePathRule Id="921cc481-6e17-4653-8f75-050b80acca20" Name="Allow Program Files" UserOrGroupSid="S-1-1-0" Action="Allow"><Conditions><FilePathCondition Path="%PROGRAMFILES%\*" /></Conditions></FilePathRule><FilePathRule Id="a61c8b2c-a319-4cd0-9690-d2177cad7b51" Name="Allow Windows" UserOrGroupSid="S-1-1-0" Action="Allow"><Conditions><FilePathCondition Path="%WINDIR%\*" /></Conditions></FilePathRule><FilePathRule Id="fd686d83-a829-4351-8ff4-27c7de5755d2" Name="Allow Administrators" UserOrGroupSid="S-1-5-32-544" Action="Allow"><Conditions><FilePathCondition Path="*" /></Conditions></FilePathRule></RuleCollection></AppLockerPolicy>'
       $tempFile = "$env:TEMP\AppLockerPolicy.xml"
       Set-Content -Path $tempFile -Value $xml
       Set-AppLockerPolicy -XmlPolicy $tempFile
@@ -191,7 +177,7 @@
     - windows_hardening_enable_bitlocker | bool
     - bitlocker_feature is succeeded
   register: bitlocker_result
-  ignore_errors: true
+  failed_when: false
   tags:
     - nist_3.13.16
 

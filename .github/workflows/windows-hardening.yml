@@ -78,7 +78,7 @@ jobs:
     
     - name: Lint Ansible role
       run: |
-        ansible-lint roles/windows-hardening/ --skip-list name[casing]
+        ansible-lint roles/windows_hardening/
 
   integration-test:
     runs-on: windows-2022
