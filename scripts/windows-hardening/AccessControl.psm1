@@ -5,6 +5,31 @@
     Implements access control configurations mapped to NIST controls
 #>
 
+# Helper function for consistent action execution and logging
+function Invoke-HardeningAction {
+    param(
+        [scriptblock]$Action,
+        [string]$Description,
+        [string]$NistControl,
+        [switch]$DryRun
+    )
+    
+    if ($DryRun) {
+        Write-Host "DRY RUN: Would execute - $Description" -ForegroundColor Yellow
+        return $true
+    }
+    
+    try {
+        & $Action
+        Write-Host "SUCCESS: $Description" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Host "FAILED: $Description - Error: $_" -ForegroundColor Red
+        throw
+    }
+}
+
 # NIST 3.5.7, 3.5.8 - Identification and Authentication
 function Set-PasswordPolicy {
     [CmdletBinding()]
@@ -13,7 +38,7 @@ function Set-PasswordPolicy {
     $description = "Configure strong password policy"
     $nistControl = "3.5.7,3.5.8"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Set local security policy
         $tempFile = "$env:TEMP\secpol.cfg"
         secedit /export /cfg $tempFile /quiet
@@ -42,7 +67,7 @@ function Configure-RDPSecurity {
     $description = "Configure secure RDP settings"
     $nistControl = "3.1.13,3.13.5"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Enable RDP but with security settings
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
         
@@ -80,7 +105,7 @@ function Configure-LAPS {
     $description = "Configure Local Administrator Password Solution (LAPS)"
     $nistControl = "3.5.1,3.5.2"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Check if running on domain-joined machine
         $computerSystem = Get-WmiObject Win32_ComputerSystem
         if ($computerSystem.PartOfDomain -eq $false) {
@@ -130,7 +155,7 @@ function Enable-MultifactorAuth {
     $description = "Configure multifactor authentication requirements"
     $nistControl = "3.5.3"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Configure Windows Hello for Business via registry
         $helloRegPath = "HKLM:\SOFTWARE\Policies\Microsoft\PassportForWork"
         if (!(Test-Path $helloRegPath)) {
@@ -162,7 +187,7 @@ function Configure-UserRights {
     $description = "Configure user rights assignments"
     $nistControl = "3.1.5"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Export current security policy
         $tempFile = "$env:TEMP\userrights.inf"
         secedit /export /areas USER_RIGHTS /cfg $tempFile /quiet
@@ -195,7 +220,7 @@ function Configure-AccountManagement {
     $description = "Configure account management settings"
     $nistControl = "3.1.1,3.1.2"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Disable Guest account
         Disable-LocalUser -Name "Guest" -ErrorAction SilentlyContinue
         

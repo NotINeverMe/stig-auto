@@ -5,6 +5,31 @@
     Implements system and information integrity controls mapped to NIST controls
 #>
 
+# Helper function for consistent action execution and logging
+function Invoke-HardeningAction {
+    param(
+        [scriptblock]$Action,
+        [string]$Description,
+        [string]$NistControl,
+        [switch]$DryRun
+    )
+    
+    if ($DryRun) {
+        Write-Host "DRY RUN: Would execute - $Description" -ForegroundColor Yellow
+        return $true
+    }
+    
+    try {
+        & $Action
+        Write-Host "SUCCESS: $Description" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Host "FAILED: $Description - Error: $_" -ForegroundColor Red
+        throw
+    }
+}
+
 # NIST 3.14.1, 3.14.2 - System and Information Integrity
 function Configure-WindowsDefender {
     [CmdletBinding()]
@@ -13,7 +38,7 @@ function Configure-WindowsDefender {
     $description = "Configure Windows Defender with optimal security settings"
     $nistControl = "3.14.1,3.14.2"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Enable Windows Defender features
         Set-MpPreference -DisableRealtimeMonitoring $false
         Set-MpPreference -DisableBehaviorMonitoring $false
@@ -64,7 +89,7 @@ function Install-SecurityUpdates {
     $description = "Install security updates from Windows Update"
     $nistControl = "3.14.1"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Check if PSWindowsUpdate module is installed
         if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
             Write-HardeningLog "Installing PSWindowsUpdate module..." -NistControl $nistControl
@@ -101,7 +126,7 @@ function Enable-DeviceControl {
     $description = "Configure device control policies"
     $nistControl = "3.1.19,3.1.20"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Disable USB storage devices
         $usbStorPath = "HKLM:\SYSTEM\CurrentControlSet\Services\USBSTOR"
         Set-ItemProperty -Path $usbStorPath -Name "Start" -Value 4 -Type DWord
@@ -156,7 +181,7 @@ function Configure-AppLocker {
     $description = "Configure AppLocker application control policies"
     $nistControl = "3.4.8"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Start Application Identity service (required for AppLocker)
         Set-Service -Name "AppIDSvc" -StartupType Automatic
         Start-Service -Name "AppIDSvc" -ErrorAction SilentlyContinue
@@ -229,7 +254,7 @@ function Enable-AdvancedThreatProtection {
     $description = "Enable advanced threat detection and monitoring"
     $nistControl = "3.14.6,3.14.7"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Enable Attack Surface Reduction rules
         $asrRules = @{
             # Block executable content from email client and webmail
@@ -290,7 +315,7 @@ function Enable-BitLockerEncryption {
     $description = "Enable BitLocker drive encryption"
     $nistControl = "3.13.16"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Check if BitLocker is available
         $bitlockerFeature = Get-WindowsFeature -Name BitLocker -ErrorAction SilentlyContinue
         if ($bitlockerFeature -and $bitlockerFeature.InstallState -ne 'Installed') {

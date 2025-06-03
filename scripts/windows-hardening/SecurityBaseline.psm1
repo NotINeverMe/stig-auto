@@ -5,6 +5,31 @@
     Implements security baseline configurations mapped to NIST controls
 #>
 
+# Helper function for consistent action execution and logging
+function Invoke-HardeningAction {
+    param(
+        [scriptblock]$Action,
+        [string]$Description,
+        [string]$NistControl,
+        [switch]$DryRun
+    )
+    
+    if ($DryRun) {
+        Write-Host "DRY RUN: Would execute - $Description" -ForegroundColor Yellow
+        return $true
+    }
+    
+    try {
+        & $Action
+        Write-Host "SUCCESS: $Description" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Host "FAILED: $Description - Error: $_" -ForegroundColor Red
+        throw
+    }
+}
+
 # NIST 3.4.2, 3.4.6 - Configuration Management
 function Set-SecureExecutionPolicy {
     [CmdletBinding()]
@@ -13,7 +38,7 @@ function Set-SecureExecutionPolicy {
     $description = "Set PowerShell execution policy to RemoteSigned"
     $nistControl = "3.4.2,3.4.6"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         Set-ExecutionPolicy RemoteSigned -Force -Scope LocalMachine
     }
 }
@@ -26,7 +51,7 @@ function Enable-WindowsFirewall {
     $description = "Enable Windows Firewall for all profiles"
     $nistControl = "3.13.1,3.13.5"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True
         
         # Configure default actions
@@ -51,7 +76,7 @@ function Disable-LegacyProtocols {
     foreach ($protocol in $protocols) {
         $description = "Disable legacy protocol: $($protocol.Name)"
         
-        Invoke-HardeningAction -Description $description -NistControl $protocol.NistControl -Action {
+        Invoke-HardeningAction -Description $description -NistControl $protocol.NistControl -DryRun:$DryRun -Action {
             switch ($protocol.Name) {
                 'SMBv1' {
                     Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force
@@ -93,7 +118,7 @@ function Set-FIPSMode {
         return
     }
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         if (!(Test-Path $registryPath)) {
             New-Item -Path $registryPath -Force | Out-Null
         }
@@ -121,7 +146,7 @@ function Disable-UnnecessaryServices {
         $description = "Disable unnecessary service: $($service.DisplayName)"
         $nistControl = "3.4.6,3.4.7"
         
-        Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+        Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
             $svc = Get-Service -Name $service.Name -ErrorAction SilentlyContinue
             if ($svc) {
                 Stop-Service -Name $service.Name -Force -ErrorAction SilentlyContinue
@@ -142,7 +167,7 @@ function Apply-STIGBaseline {
     $description = "Apply DISA STIG baseline using PowerSTIG"
     $nistControl = "3.12.1,3.12.2"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Check if PowerSTIG is installed
         if (-not (Get-Module -ListAvailable -Name 'PowerSTIG')) {
             Write-HardeningLog "Installing PowerSTIG module..." -NistControl $nistControl

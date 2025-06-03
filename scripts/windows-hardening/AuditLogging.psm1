@@ -5,6 +5,31 @@
     Implements audit and accountability controls mapped to NIST controls
 #>
 
+# Helper function for consistent action execution and logging
+function Invoke-HardeningAction {
+    param(
+        [scriptblock]$Action,
+        [string]$Description,
+        [string]$NistControl,
+        [switch]$DryRun
+    )
+    
+    if ($DryRun) {
+        Write-Host "DRY RUN: Would execute - $Description" -ForegroundColor Yellow
+        return $true
+    }
+    
+    try {
+        & $Action
+        Write-Host "SUCCESS: $Description" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Host "FAILED: $Description - Error: $_" -ForegroundColor Red
+        throw
+    }
+}
+
 # NIST 3.3.1, 3.3.2 - Audit and Accountability
 function Enable-AuditLogging {
     [CmdletBinding()]
@@ -13,7 +38,7 @@ function Enable-AuditLogging {
     $description = "Enable comprehensive audit logging"
     $nistControl = "3.3.1,3.3.2"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Configure audit policy via auditpol
         $auditCategories = @(
             "Account Logon/Credential Validation:Success,Failure"
@@ -72,7 +97,7 @@ function Configure-EventLogSecurity {
     $description = "Configure event log security and retention"
     $nistControl = "3.3.8"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Configure Windows Event Log settings
         $logs = @(
             @{Name = 'Application'; MaxSize = 1024MB; Retention = 'Manual'}
@@ -122,7 +147,7 @@ function Enable-AuditCollection {
     $description = "Configure centralized audit collection"
     $nistControl = "3.3.4"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Enable Windows Event Forwarding
         $wefService = Get-Service -Name "Wecsvc" -ErrorAction SilentlyContinue
         if ($wefService) {
@@ -170,7 +195,7 @@ function Configure-AuditFailureResponse {
     $description = "Configure audit failure handling"
     $nistControl = "3.3.5"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Configure audit failure response
         $auditPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa"
         
@@ -234,7 +259,7 @@ function Protect-AuditLogs {
     $description = "Protect audit logs from unauthorized access"
     $nistControl = "3.3.9"
     
-    Invoke-HardeningAction -Description $description -NistControl $nistControl -Action {
+    Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Create audit log integrity monitoring
         $monitorScript = @'
 # Calculate and store hash of security logs
