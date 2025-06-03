@@ -138,11 +138,16 @@ jobs:
           Write-Host "No critical PSScriptAnalyzer issues found" -ForegroundColor Green
           
           # Show summary of all issues for information
-          $allResults = Invoke-ScriptAnalyzer -Path "./scripts/windows-hardening" -Recurse -ReportSummary
-          if ($allResults) {
-            Write-Host "Summary of all PSScriptAnalyzer findings (for information only):" -ForegroundColor Yellow
-            $summary = $allResults | Group-Object Severity | Select-Object Name, Count
-            $summary | Format-Table -AutoSize
+          try {
+            $allResults = Invoke-ScriptAnalyzer -Path "./scripts/windows-hardening" -Recurse
+            if ($allResults) {
+              Write-Host "Summary of all PSScriptAnalyzer findings (for information only):" -ForegroundColor Yellow
+              $summary = $allResults | Group-Object Severity | Select-Object Name, Count
+              $summary | Format-Table -AutoSize
+            }
+          }
+          catch {
+            Write-Host "Could not generate summary report: $_" -ForegroundColor Yellow
           }
         }
     
