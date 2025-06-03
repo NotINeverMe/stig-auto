@@ -5,8 +5,34 @@
   vars:
     # For Windows, override via --extra-vars "stig_application_profile=windows2022"
     stig_application_profile: "{{ lookup('ansible.builtin.env', 'STIG_PROFILE', default='rhel8') }}"
-  roles:
-    - role: "{{ stig_application_profile }}-stig"
+  
+  tasks:
+    # For Windows systems, use PowerSTIG instead of Ansible roles
+    - name: Check if running on Windows
+      set_fact:
+        is_windows: "{{ ansible_facts['os_family'] == 'Windows' }}"
+    
+    - name: Apply PowerSTIG remediation on Windows
+      when: is_windows
+      block:
+        - name: Run PowerSTIG remediation script
+          ansible.windows.win_powershell:
+            script: |
+              $scriptPath = "{{ playbook_dir }}/../scripts/remediate-powerstig.ps1"
+              if (Test-Path $scriptPath) {
+                & $scriptPath -Categories 'CAT_I','CAT_II'
+              } else {
+                throw "PowerSTIG remediation script not found at: $scriptPath"
+              }
+          tags:
+            - CAT_I
+            - CAT_II
+    
+    # For Linux systems, use traditional Ansible STIG roles
+    - name: Apply Ansible STIG role on Linux
+      when: not is_windows
+      include_role:
+        name: "{{ stig_application_profile }}-stig"
       tags:
         - CAT_I
         - CAT_II

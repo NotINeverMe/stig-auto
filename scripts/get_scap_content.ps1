@@ -4,6 +4,28 @@ param(
     [string]$OS
 )
 
+# Check if we're on Windows and should use PowerSTIG
+if ($PSVersionTable.PSVersion.Major -ge 5 -and $PSVersionTable.Platform -ne 'Unix') {
+    Write-Host "Windows detected - PowerSTIG will handle STIG data automatically" -ForegroundColor Cyan
+    Write-Host "PowerSTIG downloads and caches STIG content on first use." -ForegroundColor Green
+    
+    # Ensure PowerSTIG is available
+    if (Get-Module -ListAvailable -Name PowerSTIG) {
+        Import-Module PowerSTIG
+        Write-Host "PowerSTIG module is ready. STIG content will be downloaded when running scans." -ForegroundColor Green
+        
+        # Create a placeholder file to satisfy downstream scripts
+        New-Item -ItemType Directory -Force -Path "scap_content" | Out-Null
+        $placeholderFile = "scap_content\powerstig-managed.txt"
+        "PowerSTIG manages STIG content automatically for Windows systems" | Out-File $placeholderFile
+        
+        exit 0
+    } else {
+        Write-Warning "PowerSTIG module not found. Please run bootstrap.ps1 first."
+        Write-Host "Falling back to traditional SCAP content download..."
+    }
+}
+
 # Default: get OS from system
 if (-not $OS) {
     $caption = (Get-CimInstance Win32_OperatingSystem).Caption

@@ -118,43 +118,32 @@ jobs:
             Write-Warning "Reason: $_"
             Write-Host "This is normal in CI - SCAP sources often require authentication or have access restrictions"
           }
-      - name: Test OpenSCAP availability
+      - name: Test PowerSTIG availability
         shell: pwsh
-        continue-on-error: true  # OpenSCAP installation often fails on Windows
         run: |
-          # Try different OpenSCAP installation methods
-          $oscapInstalled = $false
+          Write-Host "Installing PowerSTIG module for Windows STIG compliance..." -ForegroundColor Cyan
           
-          # Try winget first
+          # Install PowerSTIG module
           try {
-            winget install OpenSCAP.OpenSCAP --silent --accept-source-agreements
-            if ($LASTEXITCODE -eq 0) {
-              $oscapInstalled = $true
+            if (!(Get-Module -ListAvailable -Name PowerSTIG)) {
+              Install-Module -Name PowerSTIG -Scope CurrentUser -Force -AllowClobber
+              Write-Host "PowerSTIG module installed successfully" -ForegroundColor Green
+            } else {
+              Write-Host "PowerSTIG module already available" -ForegroundColor Green
             }
+            
+            # Import and test
+            Import-Module PowerSTIG
+            $version = (Get-Module PowerSTIG).Version
+            Write-Host "PowerSTIG version: $version" -ForegroundColor Green
+            
+            # Show available STIGs
+            Write-Host "Available STIGs:" -ForegroundColor Yellow
+            Get-Stig -ListAvailable | Select-Object Technology, TechnologyVersion, StigVersion | Format-Table
+            
           } catch {
-            Write-Warning "winget OpenSCAP installation failed"
-          }
-          
-          # Try chocolatey if winget failed
-          if (-not $oscapInstalled) {
-            try {
-              choco install openscap --pre -y --ignore-checksums
-              if ($LASTEXITCODE -eq 0) {
-                $oscapInstalled = $true
-              }
-            } catch {
-              Write-Warning "chocolatey OpenSCAP installation failed"
-            }
-          }
-          
-          # Check if any installation worked
-          if (Get-Command oscap.exe -ErrorAction SilentlyContinue) {
-            oscap --version
-            Write-Host "SUCCESS: OpenSCAP successfully installed" -ForegroundColor Green
-          } else {
-            Write-Warning "EXPECTED: OpenSCAP installation failed - this is a known issue"
-            Write-Host "The chocolatey package has a broken download URL (404)" -ForegroundColor Yellow
-            Write-Host "Users should manually install from: https://github.com/OpenSCAP/openscap/releases" -ForegroundColor Cyan
+            Write-Error "PowerSTIG installation/import failed: $_"
+            exit 1
           }
       - name: Run Windows bootstrap in dry-run mode
         shell: pwsh

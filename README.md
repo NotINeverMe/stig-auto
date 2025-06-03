@@ -40,11 +40,11 @@ curl -fsSL https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstra
 iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1)
 ```
 
-**Windows Limitations:**
-- Uses ansible-core 2.17.x for compatibility
-- Requires aggressive UTF-8 encoding configuration
-- May have locale encoding issues
-- OpenSCAP installation often fails on Windows
+**Windows Features:**
+- Uses **PowerSTIG** for native Windows STIG compliance
+- No OpenSCAP dependency - pure PowerShell DSC
+- Automatic STIG content management
+- Native CKL file generation for STIG Viewer
 
 After cloning the repository or running the bootstrap script, install the Ansible roles:
 
@@ -56,10 +56,19 @@ This pulls the STIG roles from the Git repositories specified in `ansible/requir
 
 ## Overview
 
-1. Download SCAP content
+1. Download SCAP content (Linux) / PowerSTIG handles automatically (Windows)
 2. Run baseline scan
 3. Apply CAT I/II remediation
 4. Verify results
+
+### Windows Implementation
+
+On Windows systems, this project uses **PowerSTIG** - Microsoft's official PowerShell DSC module for STIG compliance:
+
+- **Automated STIG Downloads**: PowerSTIG automatically downloads the latest DISA STIGs
+- **DSC-based Remediation**: Uses PowerShell Desired State Configuration for consistent enforcement
+- **Native Integration**: No compatibility issues like OpenSCAP on Windows
+- **CKL Generation**: Creates DISA-compliant checklist files for STIG Viewer
 
 ## Manual Steps
 
