@@ -134,17 +134,25 @@ $env:ANSIBLE_STDOUT_CALLBACK = "minimal"
 Run "$PythonCmd -m pip install --upgrade pip"
 Run "$PythonCmd -m pip install 'ansible-core>=2.17,<2.18'"
 
-# Check for OpenSCAP installation
+# Install PowerSTIG module for Windows STIG compliance
+Write-Host "Installing PowerSTIG module for native Windows STIG compliance..." -ForegroundColor Cyan
 if (-not $DryRun) {
-    if (!(Get-Command oscap.exe -ErrorAction SilentlyContinue)) {
-        Write-Warning "oscap.exe not found in PATH. Please install OpenSCAP manually:"
-        Write-Warning "1. Download from: https://github.com/OpenSCAP/openscap/releases"
-        Write-Warning "2. Or use: winget install OpenSCAP.OpenSCAP"
-        Write-Warning "3. Or try: choco install openscap --pre"
-        Write-Warning "Continuing without OpenSCAP - scan operations will fail"
+    # Install PowerSTIG from PowerShell Gallery
+    if (!(Get-Module -ListAvailable -Name PowerSTIG)) {
+        Install-Module -Name PowerSTIG -Scope AllUsers -Force -AllowClobber
+        Write-Host "PowerSTIG module installed successfully" -ForegroundColor Green
     } else {
-        $oscPath = (Get-Command oscap.exe).Source
-        Write-Host "Using oscap.exe from $oscPath"
+        Write-Host "PowerSTIG module already installed"
+    }
+    
+    # Install Posh-STIG for CKL file manipulation (optional but useful)
+    if (!(Get-Module -ListAvailable -Name Posh-STIG)) {
+        try {
+            Install-Module -Name Posh-STIG -Scope AllUsers -Force -AllowClobber
+            Write-Host "Posh-STIG module installed successfully" -ForegroundColor Green
+        } catch {
+            Write-Warning "Posh-STIG installation failed (optional module)"
+        }
     }
 }
 

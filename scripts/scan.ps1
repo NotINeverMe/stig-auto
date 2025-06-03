@@ -10,6 +10,23 @@ if (-not $Baseline -and -not $After) {
     exit 1
 }
 
+# Check if we're on Windows and should use PowerSTIG
+if ($PSVersionTable.PSVersion.Major -ge 5 -and $PSVersionTable.Platform -ne 'Unix') {
+    # Windows - use PowerSTIG
+    $powerStigScript = Join-Path $PSScriptRoot "scan-powerstig.ps1"
+    if (Test-Path $powerStigScript) {
+        Write-Host "Windows detected - using PowerSTIG for scanning..." -ForegroundColor Cyan
+        if ($Baseline) {
+            & $powerStigScript -Baseline
+        } else {
+            & $powerStigScript -After
+        }
+        exit $LASTEXITCODE
+    } else {
+        Write-Warning "PowerSTIG scan script not found. Falling back to OpenSCAP..."
+    }
+}
+
 $Mode = if ($Baseline) { "baseline" } else { "after" }
 
 # Determine default STIG profile based on OS
