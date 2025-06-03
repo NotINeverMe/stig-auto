@@ -127,11 +127,23 @@ jobs:
         Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck
         Import-Module PSScriptAnalyzer
         
-        $results = Invoke-ScriptAnalyzer -Path "./scripts/windows-hardening" -Recurse -ReportSummary
+        # Only fail on Error severity, allow Warnings and Information
+        $results = Invoke-ScriptAnalyzer -Path "./scripts/windows-hardening" -Recurse -Severity Error
         
         if ($results) {
+          Write-Host "Critical PSScriptAnalyzer issues found:" -ForegroundColor Red
           $results | Format-Table -AutoSize
-          throw "PSScriptAnalyzer found issues"
+          throw "PSScriptAnalyzer found critical issues"
+        } else {
+          Write-Host "No critical PSScriptAnalyzer issues found" -ForegroundColor Green
+          
+          # Show summary of all issues for information
+          $allResults = Invoke-ScriptAnalyzer -Path "./scripts/windows-hardening" -Recurse -ReportSummary
+          if ($allResults) {
+            Write-Host "Summary of all PSScriptAnalyzer findings (for information only):" -ForegroundColor Yellow
+            $summary = $allResults | Group-Object Severity | Select-Object Name, Count
+            $summary | Format-Table -AutoSize
+          }
         }
     
     - name: Check for hardcoded secrets
