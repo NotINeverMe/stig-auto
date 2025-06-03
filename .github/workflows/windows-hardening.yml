@@ -150,9 +150,9 @@ jobs:
       shell: pwsh
       run: |
         $patterns = @(
-          'password\s*=\s*["\'][^"\']+["\']',
-          'apikey\s*=\s*["\'][^"\']+["\']',
-          'token\s*=\s*["\'][^"\']+["\']'
+          'password\s*=\s*["\'''][^"'']+["\''']',
+          'apikey\s*=\s*["\'''][^"'']+["\''']',
+          'token\s*=\s*["\'''][^"'']+["\''']'
         )
         
         $found = $false
