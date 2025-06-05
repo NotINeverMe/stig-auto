@@ -98,8 +98,6 @@ function Test-PowerSTIG {
                     WindowsServer BaseLine {
                         OsVersion = '2022'
                         OsRole = $testConfig.Role
-                        DomainName = $testConfig.DomainName
-                        ForestName = $testConfig.ForestName
                     }
                 }
             }
