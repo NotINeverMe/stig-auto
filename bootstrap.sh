@@ -75,58 +75,66 @@ if [[ ! -d /opt/stig-pipe ]]; then
     run_cmd sudo git clone https://github.com/NotINeverMe/stig-auto.git /opt/stig-pipe
     run_cmd sudo chown -R "$(whoami):$(whoami)" /opt/stig-pipe
     
-    # Verify critical directories were cloned
-    critical_paths=(
-        "/opt/stig-pipe/scripts/windows-hardening"
-        "/opt/stig-pipe/ansible/remediate.yml"
-        "/opt/stig-pipe/scripts/scan.sh"
-    )
-    
-    for path in "${critical_paths[@]}"; do
-        if [[ ! -e "$path" ]]; then
-            echo "ERROR: Critical file/directory missing after clone: $path" >&2
-            echo "Clone may have failed or been incomplete. Please verify network connectivity and try again." >&2
-            exit 1
-        fi
-    done
-    echo "Repository cloned successfully with all required files"
+    # Verify critical directories were cloned (only in non-dry-run mode)
+    if ! $DRY_RUN; then
+        critical_paths=(
+            "/opt/stig-pipe/scripts/windows-hardening"
+            "/opt/stig-pipe/ansible/remediate.yml"
+            "/opt/stig-pipe/scripts/scan.sh"
+        )
+        
+        for path in "${critical_paths[@]}"; do
+            if [[ ! -e "$path" ]]; then
+                echo "ERROR: Critical file/directory missing after clone: $path" >&2
+                echo "Clone may have failed or been incomplete. Please verify network connectivity and try again." >&2
+                exit 1
+            fi
+        done
+        echo "Repository cloned successfully with all required files"
+    else
+        echo "Dry run: Skipping clone verification"
+    fi
 else
     echo "Repository already exists at /opt/stig-pipe"
     
-    # Verify critical paths exist even if repo was already present
-    critical_paths=(
-        "/opt/stig-pipe/scripts/windows-hardening"
-        "/opt/stig-pipe/ansible/remediate.yml"
-        "/opt/stig-pipe/scripts/scan.sh"
-    )
-    
-    missing_paths=()
-    for path in "${critical_paths[@]}"; do
-        if [[ ! -e "$path" ]]; then
-            missing_paths+=("$path")
-        fi
-    done
-    
-    if [[ ${#missing_paths[@]} -gt 0 ]]; then
-        echo "WARNING: Existing repository is missing critical files:"
-        printf '  - %s\n' "${missing_paths[@]}"
-        echo "Updating repository with git pull..."
-        run_cmd sudo git -C /opt/stig-pipe pull origin main
+    # Verify critical paths exist even if repo was already present (only in non-dry-run mode)
+    if ! $DRY_RUN; then
+        critical_paths=(
+            "/opt/stig-pipe/scripts/windows-hardening"
+            "/opt/stig-pipe/ansible/remediate.yml"
+            "/opt/stig-pipe/scripts/scan.sh"
+        )
         
-        # Re-check after pull
-        still_missing=()
-        for path in "${missing_paths[@]}"; do
+        missing_paths=()
+        for path in "${critical_paths[@]}"; do
             if [[ ! -e "$path" ]]; then
-                still_missing+=("$path")
+                missing_paths+=("$path")
             fi
         done
         
-        if [[ ${#still_missing[@]} -gt 0 ]]; then
-            echo "ERROR: Repository update failed. Missing files:" >&2
-            printf '  - %s\n' "${still_missing[@]}" >&2
-            echo "Consider deleting /opt/stig-pipe and running this script again." >&2
-            exit 1
+        if [[ ${#missing_paths[@]} -gt 0 ]]; then
+            echo "WARNING: Existing repository is missing critical files:"
+            printf '  - %s\n' "${missing_paths[@]}"
+            echo "Updating repository with git pull..."
+            run_cmd sudo git -C /opt/stig-pipe pull origin main
+            
+            # Re-check after pull
+            still_missing=()
+            for path in "${missing_paths[@]}"; do
+                if [[ ! -e "$path" ]]; then
+                    still_missing+=("$path")
+                fi
+            done
+            
+            if [[ ${#still_missing[@]} -gt 0 ]]; then
+                echo "ERROR: Repository update failed. Missing files:" >&2
+                printf '  - %s\n' "${still_missing[@]}" >&2
+                echo "Consider deleting /opt/stig-pipe and running this script again." >&2
+                exit 1
+            fi
         fi
+    else
+        echo "Dry run: Skipping repository validation"
     fi
 fi
 
