@@ -62,6 +62,7 @@ printf "   .\\\\docker\\\\test-locally.ps1 -ContainerType server -TestType all\n
 echo
 echo "   # Command Line"
 printf "   docker\\\\test-locally.cmd\n"
+
 echo
 
 echo "7. USING DOCKER COMPOSE:"
@@ -114,5 +115,6 @@ echo "=== Next Steps ==="
 echo "1. Copy this project to a Windows 10/11 machine with Docker Desktop"
 echo "2. Ensure Docker Desktop is in 'Windows containers' mode"
 printf "3. Run: .\\\\docker\\\\test-locally.ps1\n"
+
 echo "4. Check test results in the test-results/ directory"
 
