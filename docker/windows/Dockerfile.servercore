@@ -1,0 +1,51 @@
+# escape=`
+ARG WINDOWS_VERSION=ltsc2022
+FROM mcr.microsoft.com/windows/servercore:${WINDOWS_VERSION}
+
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+# Install Chocolatey
+RUN Set-ExecutionPolicy Bypass -Scope Process -Force; `
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; `
+    iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+
+# Install dependencies
+RUN choco install -y git python3 --no-progress; `
+    refreshenv
+
+# Configure PowerShell Gallery as trusted
+RUN Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
+
+# Install PowerShell modules
+RUN Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force; `
+    Install-Module -Name PowerSTIG -Force -AllowClobber -SkipPublisherCheck; `
+    Install-Module -Name Pester -Force -SkipPublisherCheck -RequiredVersion 5.5.0; `
+    Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck
+
+# Create working directory
+WORKDIR C:\stig-auto
+
+# Copy repository files
+COPY . .
+
+# Set up Python environment
+RUN python -m pip install --upgrade pip; `
+    python -m pip install 'ansible-core>=2.17,<2.18'; `
+    python -m pip install pywinrm
+
+# Set environment variables
+ENV STIG_PROFILE=windows2022
+ENV PESTER_OUTPUT_DIRECTORY=C:\test-results
+
+# Create test results directory
+RUN New-Item -ItemType Directory -Force -Path C:\test-results
+
+# Verify critical paths exist after COPY
+RUN if (-not (Test-Path 'C:\stig-auto\docker\test-scripts\run-tests.ps1')) { `
+        Write-Error "Test scripts not found at expected location"; `
+        exit 1 `
+    }
+
+# Entry point for testing
+ENTRYPOINT ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+CMD ["Write-Host 'Windows STIG Test Container Ready'"]

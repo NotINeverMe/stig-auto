@@ -1,0 +1,25 @@
+Windows Docker Test Pipeline Validation Report
+Generated: Thu Jun  5 12:04:19 PM CDT 2025
+System: Linux notme-x 6.8.0-60-generic #63~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Apr 22 19:00:15 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
+
+Structure Check: PASSED
+Total Errors: 0
+
+Files Checked:
+docker/build-and-test.ps1
+docker/test-scripts/run-tests.ps1
+docker/test-scripts/validate-stig.ps1
+docker/windows/docker-compose.yml
+docker/windows/Dockerfile.server
+docker/windows/Dockerfile.servercore
+
+Next Steps:
+1. Commit these changes to git
+2. Push to GitHub to trigger Windows CI/CD tests
+3. Or run on a Windows system with Docker Desktop
+
+To run on Windows:
+  .\docker\build-and-test.ps1 -Build -Test
+
+To run specific tests:
+  docker-compose -f docker\windows\docker-compose.yml run stig-test-core
