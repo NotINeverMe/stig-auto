@@ -45,20 +45,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Docker
+        timeout-minutes: 2
         run: |
           # GitHub Actions Windows runners already have Docker installed
-          # Just ensure we're using Windows containers
+          Write-Host "Checking Docker installation..."
           docker version
-          
-          # Check if we need to switch to Windows containers
-          $dockerInfo = docker info --format '{{.OSType}}'
-          if ($dockerInfo -ne 'windows') {
-            Write-Host "Switching to Windows containers..."
-            # On GitHub Actions, Docker is already in Windows mode
-            # This step is mainly for local runners
-          }
-          
-          Write-Host "Docker is ready with Windows containers"
+          Write-Host "Docker is ready for Windows containers"
 
       - name: Build Windows Container
         timeout-minutes: 15
@@ -70,7 +62,7 @@ jobs:
           }
 
           Write-Host "Building container from $dockerfile (this may take up to 15 minutes)..."
-          docker build -f $dockerfile -t stig-test:${{ matrix.container-type }} . --progress=plain
+          docker build -f $dockerfile -t stig-test:${{ matrix.container-type }} .
 
       - name: Validate Container Build
         run: |
