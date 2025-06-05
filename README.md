@@ -137,8 +137,9 @@ which content to download.
 
 - RHEL 8
 - Ubuntu 22.04
-- Windows Server 2022
-- Windows Server 2019 (PowerSTIG + NIST hardening)
+- Windows Server 2022 (`windows2022` profile)
+- Windows Server 2019 (`windows2019` profile, PowerSTIG + NIST hardening)
+- Windows Server 2016 (`windows2016` profile)
 
 ## Windows NIST 800-171 Hardening
 

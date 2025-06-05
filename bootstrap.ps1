@@ -34,8 +34,13 @@ function Run {
 function Get-StigProfile {
     try {
         $os = Get-CimInstance Win32_OperatingSystem
-        if ($os.Caption -match 'Windows Server 2022') {
+        $caption = $os.Caption
+        if ($caption -match 'Windows Server 2022') {
             return 'windows2022'
+        } elseif ($caption -match 'Windows Server 2019') {
+            return 'windows2019'
+        } elseif ($caption -match 'Windows Server 2016') {
+            return 'windows2016'
         }
     } catch {
         # Default to windows2022 if detection fails
