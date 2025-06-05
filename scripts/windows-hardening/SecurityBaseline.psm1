@@ -5,6 +5,30 @@
     Implements security baseline configurations mapped to NIST controls
 #>
 
+# Helper logging function
+function Write-HardeningLog {
+    param(
+        [string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error', 'Success')]
+        [string]$Level = 'Info',
+        [string]$NistControl = ''
+    )
+    
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $prefix = if ($NistControl) { "[$NistControl]" } else { "" }
+    $logEntry = "$timestamp [$Level] $prefix - $Message"
+    
+    $color = switch ($Level) {
+        'Info' { 'White' }
+        'Warning' { 'Yellow' }  
+        'Error' { 'Red' }
+        'Success' { 'Green' }
+        default { 'White' }
+    }
+    
+    Write-Host $logEntry -ForegroundColor $color
+}
+
 # Helper function for consistent action execution and logging
 function Invoke-HardeningAction {
     param(

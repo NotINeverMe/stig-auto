@@ -61,15 +61,29 @@ function Enable-AuditLogging {
         )
         
         foreach ($category in $auditCategories) {
-            $parts = $category -split ':'
-            $subcategory = $parts[0]
-            $setting = $parts[1]
-            
-            if ($setting -eq "Success,Failure") {
-                auditpol /set /subcategory:"$subcategory" /success:enable /failure:enable
+            try {
+                $parts = $category -split ':'
+                $subcategory = $parts[0]
+                $setting = $parts[1]
+                
+                # Extract just the subcategory name (last part after /)
+                $subcategoryName = $subcategory -replace '.*/', ''
+                
+                if ($setting -eq "Success,Failure") {
+                    $result = & auditpol /set /subcategory:$subcategoryName /success:enable /failure:enable 2>&1
+                }
+                elseif ($setting -eq "Success") {
+                    $result = & auditpol /set /subcategory:$subcategoryName /success:enable /failure:disable 2>&1
+                }
+                
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "Successfully configured audit policy: $subcategoryName" -ForegroundColor Green
+                } else {
+                    Write-Warning "Failed to configure audit policy '$subcategoryName': $result"
+                }
             }
-            elseif ($setting -eq "Success") {
-                auditpol /set /subcategory:"$subcategory" /success:enable /failure:disable
+            catch {
+                Write-Warning "Error configuring audit policy for '$subcategory': $_"
             }
         }
         

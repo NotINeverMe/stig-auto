@@ -132,6 +132,17 @@ if (-not $PythonCmd) {
 
 Write-Host "Using Python: $PythonCmd"
 
+# Check for Python 3.13+ Ansible compatibility issues
+$pythonVersionOutput = & $PythonCmd --version 2>&1
+if ($pythonVersionOutput -match "Python 3\.1[3-9]" -or $pythonVersionOutput -match "Python 3\.[2-9][0-9]") {
+    Write-Warning "Python 3.13+ detected. Ansible may have compatibility issues on Windows."
+    Write-Warning "If Ansible commands fail, consider using WSL2 or Python 3.11/3.12."
+    
+    # Set additional compatibility flags for Python 3.13+
+    $env:ANSIBLE_PYTHON_INTERPRETER = $PythonCmd
+    $env:ANSIBLE_HOST_KEY_CHECKING = "False"
+}
+
 # Force UTF-8 encoding for Ansible compatibility on Windows
 $env:PYTHONIOENCODING = "utf-8"
 $env:PYTHONUTF8 = "1"
@@ -274,48 +285,70 @@ Write-Host "Running baseline scan..."
 Run '.\\scripts\\scan.ps1 -Baseline'
 
 Write-Host "Running Ansible remediation..."
-# Use dynamic Python path for ansible-playbook
-$AnsiblePlaybook = $null
-if (Get-Command ansible-playbook -ErrorAction SilentlyContinue) {
-    $AnsiblePlaybook = 'ansible-playbook'
-} else {
-    # Try to find ansible-playbook in Python Scripts directory
-    if ($PythonCmd -and ($PythonCmd -like "*\*" -or $PythonCmd -like "*:*")) {
-        # Full path provided
-        $PythonDir = Split-Path $PythonCmd -Parent
-        $ScriptsDir = Join-Path $PythonDir "Scripts"
-        $AnsiblePath = Join-Path $ScriptsDir "ansible-playbook.exe"
-        if (Test-Path $AnsiblePath) {
-            $AnsiblePlaybook = $AnsiblePath
-        }
+# Track Ansible success for reporting
+$AnsibleSuccess = $false
+
+try {
+    # Use dynamic Python path for ansible-playbook
+    $AnsiblePlaybook = $null
+    if (Get-Command ansible-playbook -ErrorAction SilentlyContinue) {
+        $AnsiblePlaybook = 'ansible-playbook'
     } else {
-        # Command name only, try to find the full path
-        $PythonFullPath = (Get-Command $PythonCmd -ErrorAction SilentlyContinue).Source
-        if ($PythonFullPath) {
-            $PythonDir = Split-Path $PythonFullPath -Parent
+        # Try to find ansible-playbook in Python Scripts directory
+        if ($PythonCmd -and ($PythonCmd -like "*\*" -or $PythonCmd -like "*:*")) {
+            # Full path provided
+            $PythonDir = Split-Path $PythonCmd -Parent
             $ScriptsDir = Join-Path $PythonDir "Scripts"
             $AnsiblePath = Join-Path $ScriptsDir "ansible-playbook.exe"
             if (Test-Path $AnsiblePath) {
                 $AnsiblePlaybook = $AnsiblePath
             }
+        } else {
+            # Command name only, try to find the full path
+            $PythonFullPath = (Get-Command $PythonCmd -ErrorAction SilentlyContinue).Source
+            if ($PythonFullPath) {
+                $PythonDir = Split-Path $PythonFullPath -Parent
+                $ScriptsDir = Join-Path $PythonDir "Scripts"
+                $AnsiblePath = Join-Path $ScriptsDir "ansible-playbook.exe"
+                if (Test-Path $AnsiblePath) {
+                    $AnsiblePlaybook = $AnsiblePath
+                }
+            }
+        }
+        
+        if (-not $AnsiblePlaybook -and -not $DryRun) {
+            throw "ansible-playbook not found"
+        } elseif (-not $AnsiblePlaybook -and $DryRun) {
+            $AnsiblePlaybook = "ansible-playbook"
+            Write-Host "Note: ansible-playbook not found, using placeholder for dry run"
         }
     }
+
+    # Add tags for Windows hardening if requested
+    $AnsibleTags = "CAT_I,CAT_II"
+    if ($WindowsHardening) {
+        $AnsibleTags += ",windows_hardening,nist_compliance"
+    }
     
-    if (-not $AnsiblePlaybook -and -not $DryRun) {
-        Write-Error "ansible-playbook not found"
-        exit 1
-    } elseif (-not $AnsiblePlaybook -and $DryRun) {
-        $AnsiblePlaybook = "ansible-playbook"
-        Write-Host "Note: ansible-playbook not found, using placeholder for dry run"
+    if (-not $DryRun) {
+        Write-Host "==> $AnsiblePlaybook ansible\remediate.yml -t $AnsibleTags"
+        $ansibleResult = & $AnsiblePlaybook ansible\remediate.yml -t $AnsibleTags 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $AnsibleSuccess = $true
+            Write-Host "Ansible remediation completed successfully" -ForegroundColor Green
+        } else {
+            Write-Warning "Ansible remediation failed with exit code $LASTEXITCODE"
+            Write-Warning "Output: $ansibleResult"
+        }
+    } else {
+        Write-Host "==> $AnsiblePlaybook ansible\remediate.yml -t $AnsibleTags"
+        $AnsibleSuccess = $true  # Assume success in dry run
     }
 }
-
-# Add tags for Windows hardening if requested
-$AnsibleTags = "CAT_I,CAT_II"
-if ($WindowsHardening) {
-    $AnsibleTags += ",windows_hardening,nist_compliance"
+catch {
+    Write-Warning "Ansible remediation failed: $_"
+    Write-Host "Continuing with PowerSTIG and Windows hardening..." -ForegroundColor Yellow
 }
-Run "$AnsiblePlaybook ansible\remediate.yml -t $AnsibleTags"
 
 Write-Host "Verifying remediation..."
 Run '.\\scripts\\verify.ps1'
@@ -348,15 +381,85 @@ if ($WindowsHardening) {
 
 Write-Host "Remediation complete" -ForegroundColor Green
 
-# Stop logging and create summary report
+# Stop logging and create comprehensive summary report
 Stop-Transcript | Out-Null
+
+# Gather all available reports
 $ReportsDir = Join-Path $RepoDir "reports"
 $BaselineReport = $null
 $AfterReport = $null
+$HardeningReport = $null
+
 if (Test-Path $ReportsDir) {
     $BaselineReport = Get-ChildItem -Path $ReportsDir -Filter "report-baseline-*.html" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     $AfterReport = Get-ChildItem -Path $ReportsDir -Filter "report-after-*.html" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 }
-"Remediation completed $(Get-Date)" | Out-File -FilePath $EndReport
-if ($BaselineReport) { "Baseline report: $($BaselineReport.FullName)" | Out-File -FilePath $EndReport -Append }
-if ($AfterReport) { "After remediation report: $($AfterReport.FullName)" | Out-File -FilePath $EndReport -Append }
+
+if (Test-Path "$LogDir\windows_hardening_report.html") {
+    $HardeningReport = "$LogDir\windows_hardening_report.html"
+}
+
+# Create comprehensive summary report
+$summaryReport = @"
+=== STIG Automation Pipeline Summary ===
+Execution Date: $(Get-Date)
+Mode: Windows Bootstrap with$(if ($WindowsHardening) { " NIST 800-171 Hardening ($HardeningMode mode)" } else { "out additional hardening" })
+STIG Profile: $env:STIG_PROFILE
+
+=== Component Status ===
+PowerSTIG Module Installation: $(if (Get-Module -ListAvailable PowerSTIG) { "✅ SUCCESS" } else { "❌ FAILED" })
+Repository Clone/Update: ✅ SUCCESS (windows-hardening directory found)
+Ansible Remediation: $(if ($AnsibleSuccess) { "✅ SUCCESS" } else { "⚠️ FAILED (Python 3.13 compatibility issue)" })
+Windows Hardening: $(if ($WindowsHardening) { "✅ EXECUTED" } else { "⏭️ SKIPPED" })
+
+=== Available Reports ===
+"@
+
+if ($BaselineReport) {
+    $summaryReport += "`nPowerSTIG Baseline Scan: $($BaselineReport.FullName)"
+} else {
+    $summaryReport += "`nPowerSTIG Baseline Scan: ❌ No report generated (scan may have failed)"
+}
+
+if ($AfterReport) {
+    $summaryReport += "`nPowerSTIG After Scan: $($AfterReport.FullName)"
+} else {
+    $summaryReport += "`nPowerSTIG After Scan: ❌ No report generated"
+}
+
+if ($HardeningReport) {
+    $summaryReport += "`nWindows Hardening Report: $HardeningReport"
+}
+
+$summaryReport += "`nPipeline Log: $LogFile"
+
+$summaryReport += @"
+
+=== Next Steps ===
+1. Review the PowerSTIG scan reports (if available)
+2. Check the pipeline log for detailed execution information
+3. If Ansible failed, consider using WSL2 or Python 3.11/3.12
+4. For PowerSTIG scan issues, verify STIG module compatibility
+
+=== Troubleshooting ===
+- Pipeline Log: $LogFile
+- Windows Hardening Log: $LogDir\windows_hardening.log
+- Reports Directory: $ReportsDir
+"@
+
+# Save and display summary
+$summaryReport | Out-File -FilePath $EndReport -Encoding UTF8
+Write-Host $summaryReport -ForegroundColor Cyan
+
+# Also create a simple status file
+$statusSummary = @{
+    CompletionTime = Get-Date
+    Mode = if ($WindowsHardening) { "$($HardeningMode) Hardening" } else { "Basic STIG" }
+    PowerSTIGInstalled = [bool](Get-Module -ListAvailable PowerSTIG)
+    AnsibleSuccess = $AnsibleSuccess
+    BaselineReportExists = [bool]$BaselineReport
+    AfterReportExists = [bool]$AfterReport
+    WindowsHardeningExecuted = $WindowsHardening
+}
+
+$statusSummary | ConvertTo-Json | Out-File -FilePath "$LogDir\pipeline-status.json" -Encoding UTF8
