@@ -12,12 +12,13 @@ RUN Set-ExecutionPolicy Bypass -Scope Process -Force; `
 # Install dependencies
 RUN choco install -y git python3 --no-progress
 
-# Configure PowerShell Gallery as trusted
-RUN Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
+# Install NuGet package provider first
+RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; `
+    Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force; `
+    Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
 
 # Install PowerShell modules including optional ones for full testing
-RUN Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force; `
-    Install-Module -Name PowerSTIG -Force -AllowClobber -SkipPublisherCheck; `
+RUN Install-Module -Name PowerSTIG -Force -AllowClobber -SkipPublisherCheck; `
     Install-Module -Name Pester -Force -SkipPublisherCheck -RequiredVersion 5.5.0; `
     Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck; `
     Install-Module -Name Posh-STIG -Force -AllowClobber -SkipPublisherCheck; `
