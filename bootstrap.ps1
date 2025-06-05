@@ -58,8 +58,8 @@ WARNING: You are running on native Windows PowerShell.
 Ansible control nodes are officially supported on Linux/macOS only.
 For best results, consider using WSL2 (Ubuntu 22.04):
   wsl --install -d Ubuntu-22.04
-  
-Continuing with experimental Windows support...
+
+Continuing with Windows support...
 "@
 }
 

@@ -12,9 +12,9 @@ appropriate for all environments, particularly those without online access.
 **Supported Control Nodes:**
 - Ubuntu 22.04 / Debian 12 / AlmaLinux 9 (Python 3.10-3.12) ✅ **Recommended**
 - Windows 10/11 with WSL2 (Ubuntu 22.04) ✅ **Recommended**
-- Native Windows 10/11 ⚠️ **Experimental** (see limitations below)
+ - Native Windows 10/11 ⚠️ **Limited Support** (see limitations below)
 
-**Important:** Ansible officially supports Linux/macOS control nodes only. Native Windows support is experimental and may have compatibility issues.
+**Important:** Ansible officially supports Linux/macOS control nodes only. Native Windows support may have compatibility issues.
 
 ## Quick Start
 
@@ -34,7 +34,7 @@ wsl --install -d Ubuntu-22.04
 curl -fsSL https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.sh | sudo bash
 ```
 
-### Native Windows (Experimental)
+### Native Windows
 
 ```powershell
 # Basic STIG remediation
