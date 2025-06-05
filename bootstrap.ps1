@@ -183,60 +183,81 @@ if (-not $DryRun) {
 # Clone repo to the repository directory if not present
 if (!(Test-Path $RepoDir)) {
     Write-Host "Cloning repository to C:\stig-pipe"
-    Run "git clone https://github.com/NotINeverMe/stig-auto.git \"$RepoDir\""
-    
-    # Verify critical directories were cloned
-    $CriticalPaths = @(
-        "$RepoDir\scripts\windows-hardening",
-        "$RepoDir\ansible\remediate.yml",
-        "$RepoDir\scripts\scan.ps1"
-    )
-    
-    foreach ($path in $CriticalPaths) {
-        if (!(Test-Path $path)) {
-            Write-Error "Critical file/directory missing after clone: $path"
-            Write-Error "Clone may have failed or been incomplete. Please verify network connectivity and try again."
+    if (-not $DryRun) {
+        Write-Host "==> git clone https://github.com/NotINeverMe/stig-auto.git `"$RepoDir`""
+        $cloneResult = & git clone https://github.com/NotINeverMe/stig-auto.git $RepoDir 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Git clone failed: $cloneResult"
             exit 1
         }
+    } else {
+        Write-Host "==> git clone https://github.com/NotINeverMe/stig-auto.git `"$RepoDir`""
     }
-    Write-Host "Repository cloned successfully with all required files" -ForegroundColor Green
+    
+    # Verify critical directories were cloned (only in non-dry-run mode)
+    if (-not $DryRun) {
+        $CriticalPaths = @(
+            "$RepoDir\scripts\windows-hardening",
+            "$RepoDir\ansible\remediate.yml",
+            "$RepoDir\scripts\scan.ps1"
+        )
+        
+        foreach ($path in $CriticalPaths) {
+            if (!(Test-Path $path)) {
+                Write-Error "Critical file/directory missing after clone: $path"
+                Write-Error "Clone may have failed or been incomplete. Please verify network connectivity and try again."
+                exit 1
+            }
+        }
+        Write-Host "Repository cloned successfully with all required files" -ForegroundColor Green
+    } else {
+        Write-Host "Dry run: Skipping clone verification"
+    }
 } else {
     Write-Host "Repository already exists at $RepoDir"
     
-    # Verify critical paths exist even if repo was already present
-    $CriticalPaths = @(
-        "$RepoDir\scripts\windows-hardening",
-        "$RepoDir\ansible\remediate.yml", 
-        "$RepoDir\scripts\scan.ps1"
-    )
-    
-    $missingPaths = @()
-    foreach ($path in $CriticalPaths) {
-        if (!(Test-Path $path)) {
-            $missingPaths += $path
-        }
-    }
-    
-    if ($missingPaths.Count -gt 0) {
-        Write-Warning "Existing repository is missing critical files:"
-        $missingPaths | ForEach-Object { Write-Warning "  - $_" }
-        Write-Host "Updating repository with git pull..." -ForegroundColor Yellow
-        Run "git -C \"$RepoDir\" pull origin main"
+    # Verify critical paths exist even if repo was already present (only in non-dry-run mode)
+    if (-not $DryRun) {
+        $CriticalPaths = @(
+            "$RepoDir\scripts\windows-hardening",
+            "$RepoDir\ansible\remediate.yml", 
+            "$RepoDir\scripts\scan.ps1"
+        )
         
-        # Re-check after pull
-        $stillMissing = @()
-        foreach ($path in $missingPaths) {
+        $missingPaths = @()
+        foreach ($path in $CriticalPaths) {
             if (!(Test-Path $path)) {
-                $stillMissing += $path
+                $missingPaths += $path
             }
         }
         
-        if ($stillMissing.Count -gt 0) {
-            Write-Error "Repository update failed. Missing files:"
-            $stillMissing | ForEach-Object { Write-Error "  - $_" }
-            Write-Error "Consider deleting $RepoDir and running this script again."
-            exit 1
+        if ($missingPaths.Count -gt 0) {
+            Write-Warning "Existing repository is missing critical files:"
+            $missingPaths | ForEach-Object { Write-Warning "  - $_" }
+            Write-Host "Updating repository with git pull..." -ForegroundColor Yellow
+            Write-Host "==> git -C `"$RepoDir`" pull origin main"
+            $pullResult = & git -C $RepoDir pull origin main 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "Git pull failed: $pullResult"
+            }
+            
+            # Re-check after pull
+            $stillMissing = @()
+            foreach ($path in $missingPaths) {
+                if (!(Test-Path $path)) {
+                    $stillMissing += $path
+                }
+            }
+            
+            if ($stillMissing.Count -gt 0) {
+                Write-Error "Repository update failed. Missing files:"
+                $stillMissing | ForEach-Object { Write-Error "  - $_" }
+                Write-Error "Consider deleting $RepoDir and running this script again."
+                exit 1
+            }
         }
+    } else {
+        Write-Host "Dry run: Skipping repository validation"
     }
 }
 
