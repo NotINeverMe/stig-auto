@@ -10,8 +10,7 @@ RUN Set-ExecutionPolicy Bypass -Scope Process -Force; `
     iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 
 # Install dependencies
-RUN choco install -y git python3 --no-progress; `
-    refreshenv
+RUN choco install -y git python3 --no-progress
 
 # Configure PowerShell Gallery as trusted
 RUN Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
@@ -29,9 +28,11 @@ WORKDIR C:\stig-auto
 COPY . .
 
 # Set up Python environment
-RUN python -m pip install --upgrade pip; `
-    python -m pip install 'ansible-core>=2.17,<2.18'; `
-    python -m pip install pywinrm
+# Ensure Python is in PATH and install packages
+RUN $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine'); `
+    python --version; `
+    python -m pip install --upgrade pip; `
+    python -m pip install 'ansible-core>=2.17,<2.18' pywinrm
 
 # Set environment variables
 ENV STIG_PROFILE=windows2022
