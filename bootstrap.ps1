@@ -79,7 +79,7 @@ Run 'choco install git -y'
 # Note: OpenSCAP Chocolatey package currently has issues, will install manually if needed
 Run 'choco install python -y --allow-downgrade'
 
-Run 'refreshenv'
+Run 'Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1; Update-SessionEnvironment'
 
 # Find Python installation dynamically, preferring Ansible-compatible versions
 $PythonCmd = $null
