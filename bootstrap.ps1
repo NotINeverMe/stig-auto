@@ -144,8 +144,12 @@ Write-Host "Installing PowerSTIG module for native Windows STIG compliance..." -
 if (-not $DryRun) {
     # Install PowerSTIG from PowerShell Gallery
     if (!(Get-Module -ListAvailable -Name PowerSTIG)) {
-        Install-Module -Name PowerSTIG -Scope AllUsers -Force -AllowClobber
-        Write-Host "PowerSTIG module installed successfully" -ForegroundColor Green
+        try {
+            Install-Module -Name PowerSTIG -Scope AllUsers -Force -AllowClobber -ErrorAction Stop
+            Write-Host "PowerSTIG module installed successfully" -ForegroundColor Green
+        } catch {
+            Write-Warning "PowerSTIG installation failed"
+        }
     } else {
         Write-Host "PowerSTIG module already installed"
     }
@@ -153,7 +157,7 @@ if (-not $DryRun) {
     # Install Posh-STIG for CKL file manipulation (optional but useful)
     if (!(Get-Module -ListAvailable -Name Posh-STIG)) {
         try {
-            Install-Module -Name Posh-STIG -Scope AllUsers -Force -AllowClobber
+            Install-Module -Name Posh-STIG -Scope AllUsers -Force -AllowClobber -ErrorAction Stop
             Write-Host "Posh-STIG module installed successfully" -ForegroundColor Green
         } catch {
             Write-Warning "Posh-STIG installation failed (optional module)"
@@ -163,7 +167,7 @@ if (-not $DryRun) {
     # Install PSWindowsUpdate for security update management
     if (!(Get-Module -ListAvailable -Name PSWindowsUpdate)) {
         try {
-            Install-Module -Name PSWindowsUpdate -Scope AllUsers -Force -AllowClobber
+            Install-Module -Name PSWindowsUpdate -Scope AllUsers -Force -AllowClobber -ErrorAction Stop
             Write-Host "PSWindowsUpdate module installed successfully" -ForegroundColor Green
         } catch {
             Write-Warning "PSWindowsUpdate installation failed (used for update management)"
