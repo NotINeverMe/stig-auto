@@ -146,7 +146,7 @@ function Test-HardeningModules {
     # Test the main hardening script in dry-run
     try {
         Write-Host "`nTesting main hardening script..." -ForegroundColor Yellow
-        & C:\stig-auto\scripts\windows-hardening\Invoke-WindowsHardening.ps1 -WhatIf -Verbose:$Verbose
+        & C:\stig-auto\scripts\windows-hardening\Invoke-WindowsHardening.ps1 -DryRun -Verbose:$Verbose
         Write-Host "Main hardening script test completed" -ForegroundColor Green
     } catch {
         Write-Error "Main hardening script test failed: $_"
