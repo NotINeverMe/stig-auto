@@ -61,5 +61,5 @@ RUN if (-not (Test-Path 'C:\stig-auto\docker\test-scripts\run-tests.ps1')) { `
     }
 
 # Entry point for testing
-ENTRYPOINT ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
-CMD ["Write-Host 'Windows STIG Full Test Container Ready'"]
+ENTRYPOINT ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass"]
+CMD ["-Command", "Write-Host 'Windows STIG Full Test Container Ready'"]
