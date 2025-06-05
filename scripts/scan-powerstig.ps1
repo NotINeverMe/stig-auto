@@ -55,14 +55,36 @@ $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 Write-Host "Running $Mode scan using PowerSTIG..."
 
 try {
-    # Get available STIG
-    $availableStigs = Get-Stig -ListAvailable | Where-Object {
+    # Debug: List all available STIGs
+    Write-Host "Available PowerSTIG modules:" -ForegroundColor Yellow
+    $allStigs = Get-Stig -ListAvailable
+    $allStigs | ForEach-Object { 
+        Write-Host "  - $($_.TechnologyRole) $($_.TechnologyVersion) (STIG v$($_.StigVersion))" -ForegroundColor Gray
+    }
+    
+    # Get available STIG with flexible matching
+    $availableStigs = $allStigs | Where-Object {
         $_.TechnologyRole -eq $osInfo.OsType -and 
-        $_.TechnologyVersion -eq $osInfo.Version
+        ($_.TechnologyVersion -eq $osInfo.Version -or 
+         $_.TechnologyVersion -eq $osInfo.Version.ToString() -or
+         $_.TechnologyVersion -like "*$($osInfo.Version)*")
     } | Sort-Object -Property StigVersion -Descending | Select-Object -First 1
     
+    # If no exact match, try broader search for Windows Server
+    if (-not $availableStigs -and $osInfo.OsType -eq 'WindowsServer') {
+        Write-Host "No exact version match, trying broader search for Windows Server..." -ForegroundColor Yellow
+        $availableStigs = $allStigs | Where-Object {
+            $_.TechnologyRole -eq 'WindowsServer'
+        } | Sort-Object -Property StigVersion -Descending | Select-Object -First 1
+    }
+    
     if (-not $availableStigs) {
-        throw "No STIG found for $($osInfo.OsType) $($osInfo.Version)"
+        Write-Warning "No STIG found for $($osInfo.OsType) $($osInfo.Version)"
+        Write-Host "Available STIG technologies:" -ForegroundColor Yellow
+        $allStigs | Group-Object TechnologyRole | ForEach-Object {
+            Write-Host "  $($_.Name): $($_.Group.TechnologyVersion -join ', ')" -ForegroundColor Gray
+        }
+        throw "No compatible STIG found for $($osInfo.OsType) $($osInfo.Version)"
     }
     
     Write-Host "Using STIG: $($availableStigs.Title) v$($availableStigs.StigVersion)"
