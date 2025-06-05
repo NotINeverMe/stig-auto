@@ -1,4 +1,4 @@
-#\!/bin/bash
+#!/bin/bash
 
 # Script to show the exact Docker commands that would run on Windows
 # This helps validate the setup without actually running Windows containers
@@ -56,12 +56,12 @@ echo
 
 echo "6. USING THE HELPER SCRIPTS:"
 echo "   # PowerShell (recommended)"
-echo "   .\docker\test-locally.ps1"
-echo "   .\docker\test-locally.ps1 -TestType unit"
-echo "   .\docker\test-locally.ps1 -ContainerType server -TestType all"
+echo "   .\\docker\\test-locally.ps1"
+echo "   .\\docker\\test-locally.ps1 -TestType unit"
+echo "   .\\docker\\test-locally.ps1 -ContainerType server -TestType all"
 echo
 echo "   # Command Line"
-echo "   docker\test-locally.cmd"
+echo "   docker\\test-locally.cmd"
 echo
 
 echo "7. USING DOCKER COMPOSE:"
@@ -113,6 +113,6 @@ echo
 echo "=== Next Steps ==="
 echo "1. Copy this project to a Windows 10/11 machine with Docker Desktop"
 echo "2. Ensure Docker Desktop is in 'Windows containers' mode"
-echo "3. Run: .\docker\test-locally.ps1"
+echo "3. Run: .\\docker\\test-locally.ps1"
 echo "4. Check test results in the test-results/ directory"
 
