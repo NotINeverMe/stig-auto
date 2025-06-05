@@ -1,0 +1,65 @@
+# escape=`
+ARG WINDOWS_VERSION=ltsc2022
+FROM mcr.microsoft.com/windows/server:${WINDOWS_VERSION}
+
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+# Install Chocolatey
+RUN Set-ExecutionPolicy Bypass -Scope Process -Force; `
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; `
+    iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+
+# Install dependencies
+RUN choco install -y git python3 --no-progress
+
+# Install NuGet package provider first
+RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; `
+    Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force; `
+    Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
+
+# Install PowerShell modules including optional ones for full testing
+RUN Install-Module -Name PowerSTIG -Force -AllowClobber -SkipPublisherCheck; `
+    Install-Module -Name Pester -Force -SkipPublisherCheck -RequiredVersion 5.5.0; `
+    Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck; `
+    Install-Module -Name Posh-STIG -Force -AllowClobber -SkipPublisherCheck; `
+    Install-Module -Name PSWindowsUpdate -Force -AllowClobber -SkipPublisherCheck
+
+# Create working directory
+WORKDIR C:\stig-auto
+
+# Copy repository files
+COPY . .
+
+# Set up Python environment
+# Ensure Python is in PATH and install packages
+RUN $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine'); `
+    python --version; `
+    python -m pip install --upgrade pip; `
+    python -m pip install 'ansible-core>=2.17,<2.18' pywinrm
+
+# Enable additional Windows features for full STIG testing
+# Note: Some features may not be available in container environments
+RUN try { `
+        Enable-WindowsOptionalFeature -Online -FeatureName NetFx3 -All -NoRestart -ErrorAction SilentlyContinue; `
+        Write-Host "NetFx3 feature configured" `
+    } catch { `
+        Write-Warning "Could not enable NetFx3 in container: $_" `
+    }
+
+# Set environment variables
+ENV STIG_PROFILE=windows2022
+ENV PESTER_OUTPUT_DIRECTORY=C:\test-results
+ENV FULL_STIG_TEST=true
+
+# Create test results directory
+RUN New-Item -ItemType Directory -Force -Path C:\test-results
+
+# Verify critical paths exist after COPY
+RUN if (-not (Test-Path 'C:\stig-auto\docker\test-scripts\run-tests.ps1')) { `
+        Write-Error "Test scripts not found at expected location"; `
+        exit 1 `
+    }
+
+# Entry point for testing
+ENTRYPOINT ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass"]
+CMD ["-Command", "Write-Host 'Windows STIG Full Test Container Ready'"]

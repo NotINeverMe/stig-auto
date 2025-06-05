@@ -1,0 +1,29 @@
+---
+name: Windows Docker Minimal
+
+on:
+  push:
+    branches: [feature/windows-docker-testing]
+  workflow_dispatch:
+
+jobs:
+  minimal-build-test:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Docker
+        run: |
+          docker version
+          Write-Host "Docker is ready"
+
+      - name: Build Container
+        run: |
+          Write-Host "Building Windows container..."
+          docker build -f docker/windows/Dockerfile.servercore -t stig-test:minimal .
+
+      - name: Test Container
+        run: |
+          Write-Host "Testing container..."
+          docker run --rm stig-test:minimal -Command "Write-Host 'Container works!'"

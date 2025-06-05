@@ -1,0 +1,67 @@
+services:
+  stig-test-core:
+    build:
+      context: ../..
+      dockerfile: docker/windows/Dockerfile.servercore
+    image: stig-auto/windows-test:core
+    isolation: process  # Use process isolation on Windows for better performance
+    volumes:
+      - ../../scripts:C:/stig-auto/scripts:ro
+      - ../../tests:C:/stig-auto/tests:ro
+      - ../../roles:C:/stig-auto/roles:ro
+      - ../../ansible:C:/stig-auto/ansible:ro
+      - test-results:C:/test-results
+    environment:
+      - STIG_PROFILE=windows2022
+      - TEST_MODE=docker
+      - PESTER_OUTPUT_DIRECTORY=C:/test-results
+    command: ["-File", "C:/stig-auto/docker/test-scripts/run-tests.ps1"]
+    networks:
+      - stig-test
+
+  stig-test-full:
+    build:
+      context: ../..
+      dockerfile: docker/windows/Dockerfile.server
+    image: stig-auto/windows-test:full
+    isolation: hyperv  # Use Hyper-V for full Windows features
+    volumes:
+      - ../../:C:/stig-auto:ro
+      - test-results:C:/test-results
+    environment:
+      - STIG_PROFILE=windows2022
+      - TEST_MODE=docker
+      - FULL_STIG_TEST=true
+      - PESTER_OUTPUT_DIRECTORY=C:/test-results
+    command: ["-File", "C:/stig-auto/docker/test-scripts/run-tests.ps1", "-TestType", "all"]
+    networks:
+      - stig-test
+
+  stig-test-2019:
+    build:
+      context: ../..
+      dockerfile: docker/windows/Dockerfile.servercore
+      args:
+        WINDOWS_VERSION: ltsc2019
+    image: stig-auto/windows-test:2019
+    isolation: process
+    volumes:
+      - ../../scripts:C:/stig-auto/scripts:ro
+      - ../../tests:C:/stig-auto/tests:ro
+      - ../../roles:C:/stig-auto/roles:ro
+      - test-results:C:/test-results
+    environment:
+      - STIG_PROFILE=windows2019
+      - TEST_MODE=docker
+      - PESTER_OUTPUT_DIRECTORY=C:/test-results
+    command: ["-File", "C:/stig-auto/docker/test-scripts/run-tests.ps1", "-TestType", "unit"]
+    networks:
+      - stig-test
+
+volumes:
+  test-results:
+    driver: local
+
+networks:
+  stig-test:
+    driver: nat

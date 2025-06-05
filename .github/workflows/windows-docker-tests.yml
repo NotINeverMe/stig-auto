@@ -1,0 +1,196 @@
+---
+name: Windows Docker Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'scripts/windows-hardening/**'
+      - 'scripts/*.ps1'
+      - 'tests/windows/**'
+      - 'docker/windows/**'
+      - '.github/workflows/windows-docker-tests.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/windows-hardening/**'
+      - 'scripts/*.ps1'
+      - 'tests/windows/**'
+      - 'docker/windows/**'
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Test type to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - unit
+          - powerstig
+          - hardening
+          - integration
+
+jobs:
+  windows-container-tests:
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        test-type: [unit, powerstig, hardening]
+        container-type: [servercore]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Docker
+        run: |
+          # GitHub Actions Windows runners already have Docker installed
+          # Just ensure we're using Windows containers
+          docker version
+          
+          # Check if we need to switch to Windows containers
+          $dockerInfo = docker info --format '{{.OSType}}'
+          if ($dockerInfo -ne 'windows') {
+            Write-Host "Switching to Windows containers..."
+            # On GitHub Actions, Docker is already in Windows mode
+            # This step is mainly for local runners
+          }
+          
+          Write-Host "Docker is ready with Windows containers"
+
+      - name: Build Windows Container
+        run: |
+          $dockerfile = if ("${{ matrix.container-type }}" -eq "servercore") {
+            "docker/windows/Dockerfile.servercore"
+          } else {
+            "docker/windows/Dockerfile.server"
+          }
+
+          Write-Host "Building container from $dockerfile"
+          docker build -f $dockerfile -t stig-test:${{ matrix.container-type }} .
+
+      - name: Validate Container Build
+        run: |
+          docker run --rm stig-test:${{ matrix.container-type }} `
+            Write-Host 'Container is functional'
+
+      - name: Run Tests in Container
+        id: run-tests
+        run: |
+          $testType = "${{ matrix.test-type }}"
+          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and `
+              "${{ github.event.inputs.test_type }}") {
+            $testType = "${{ github.event.inputs.test_type }}"
+          }
+
+          Write-Host "Running $testType tests in ${{ matrix.container-type }} container"
+
+          # Create local test results directory
+          New-Item -ItemType Directory -Force -Path `
+            "${{ github.workspace }}/test-results"
+
+          # Run tests with appropriate isolation
+          $isolation = if ("${{ matrix.container-type }}" -eq "servercore") {
+            "process"
+          } else {
+            "hyperv"
+          }
+
+          docker run --rm `
+            --isolation=$isolation `
+            -v "${{ github.workspace }}/scripts:C:/stig-auto/scripts:ro" `
+            -v "${{ github.workspace }}/tests:C:/stig-auto/tests:ro" `
+            -v "${{ github.workspace }}/roles:C:/stig-auto/roles:ro" `
+            -v "${{ github.workspace }}/ansible:C:/stig-auto/ansible:ro" `
+            -v "${{ github.workspace }}/test-results:C:/test-results" `
+            -e GITHUB_ACTIONS=true `
+            -e RUNNER_OS=Windows `
+            stig-test:${{ matrix.container-type }} `
+            -File C:/stig-auto/docker/test-scripts/run-tests.ps1 `
+            -TestType $testType
+
+      - name: Validate STIG Configuration
+        if: matrix.test-type == 'powerstig'
+        run: |
+          docker run --rm `
+            --isolation=process `
+            -v "${{ github.workspace }}/test-results:C:/test-results" `
+            stig-test:${{ matrix.container-type }} `
+            -File C:/stig-auto/docker/test-scripts/validate-stig.ps1 -CheckOnly
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.container-type }}-${{ matrix.test-type }}
+          path: test-results/
+          retention-days: 30
+
+      - name: Publish Test Report
+        if: always() && matrix.test-type == 'unit'
+        uses: dorny/test-reporter@v1
+        with:
+          name: Windows Container Tests (${{ matrix.container-type }})
+          path: 'test-results/pester-results.xml'
+          reporter: 'java-junit'
+          fail-on-error: true
+
+  integration-test:
+    runs-on: windows-2022
+    needs: windows-container-tests
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Docker
+        run: |
+          docker version
+          Write-Host "Docker is ready with Windows containers"
+
+      - name: Run Docker Compose Tests
+        run: |
+          cd docker/windows
+
+          # Build all services
+          docker-compose build
+
+          # Run core tests
+          docker-compose run --rm stig-test-core
+
+          # Run validation
+          docker-compose run --rm stig-test-core powershell `
+            -File C:/stig-auto/docker/test-scripts/validate-stig.ps1
+
+      - name: Cleanup
+        if: always()
+        run: |
+          cd docker/windows
+          docker-compose down -v
+
+  build-multiversion:
+    runs-on: windows-2022
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        windows-version: [ltsc2022, ltsc2019]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Multi-Version Container
+        run: |
+          # Build with specific version using existing ARG support
+          docker build `
+            --build-arg WINDOWS_VERSION=${{ matrix.windows-version }} `
+            -f docker/windows/Dockerfile.servercore `
+            -t stig-test:${{ matrix.windows-version }} .
+
+      - name: Test Version Compatibility
+        run: |
+          docker run --rm stig-test:${{ matrix.windows-version }} `
+            powershell -Command `
+            "Get-ComputerInfo | Select-Object WindowsVersion, OsVersion"

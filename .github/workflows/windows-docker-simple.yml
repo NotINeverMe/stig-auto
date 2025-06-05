@@ -1,0 +1,37 @@
+---
+name: Windows Docker Simple Test
+
+on:
+  push:
+    branches: [feature/windows-docker-testing]
+  workflow_dispatch:
+
+jobs:
+  simple-test:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Test Docker availability
+        run: |
+          docker version
+          Write-Host "Docker is available"
+
+      - name: Simple container test
+        run: |
+          # Try to pull a simple Windows container
+          docker pull mcr.microsoft.com/windows/servercore:ltsc2022
+          
+          # Test basic functionality
+          docker run --rm mcr.microsoft.com/windows/servercore:ltsc2022 cmd /c echo "Windows container works"
+
+      - name: Test our Dockerfile syntax
+        run: |
+          # Just validate our Dockerfile without building
+          if (Test-Path "docker/windows/Dockerfile.servercore") {
+            Write-Host "Dockerfile found"
+            Get-Content "docker/windows/Dockerfile.servercore" | Select-Object -First 10
+          } else {
+            Write-Error "Dockerfile not found"
+          }
