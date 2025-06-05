@@ -38,13 +38,13 @@ curl -fsSL https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstra
 
 ```powershell
 # Basic STIG remediation
-iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1)
+iex "& { $(irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1) }"
 
 # With additional NIST 800-171 hardening
-iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1) -WindowsHardening
+iex "& { $(irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1) } -WindowsHardening"
 
 # Full hardening mode (includes all security controls)
-iex (irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1) -WindowsHardening -HardeningMode Full
+iex "& { $(irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1) } -WindowsHardening -HardeningMode Full"
 ```
 
 **Windows Features:**
