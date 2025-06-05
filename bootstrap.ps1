@@ -184,6 +184,60 @@ if (-not $DryRun) {
 if (!(Test-Path $RepoDir)) {
     Write-Host "Cloning repository to C:\stig-pipe"
     Run "git clone https://github.com/NotINeverMe/stig-auto.git \"$RepoDir\""
+    
+    # Verify critical directories were cloned
+    $CriticalPaths = @(
+        "$RepoDir\scripts\windows-hardening",
+        "$RepoDir\ansible\remediate.yml",
+        "$RepoDir\scripts\scan.ps1"
+    )
+    
+    foreach ($path in $CriticalPaths) {
+        if (!(Test-Path $path)) {
+            Write-Error "Critical file/directory missing after clone: $path"
+            Write-Error "Clone may have failed or been incomplete. Please verify network connectivity and try again."
+            exit 1
+        }
+    }
+    Write-Host "Repository cloned successfully with all required files" -ForegroundColor Green
+} else {
+    Write-Host "Repository already exists at $RepoDir"
+    
+    # Verify critical paths exist even if repo was already present
+    $CriticalPaths = @(
+        "$RepoDir\scripts\windows-hardening",
+        "$RepoDir\ansible\remediate.yml", 
+        "$RepoDir\scripts\scan.ps1"
+    )
+    
+    $missingPaths = @()
+    foreach ($path in $CriticalPaths) {
+        if (!(Test-Path $path)) {
+            $missingPaths += $path
+        }
+    }
+    
+    if ($missingPaths.Count -gt 0) {
+        Write-Warning "Existing repository is missing critical files:"
+        $missingPaths | ForEach-Object { Write-Warning "  - $_" }
+        Write-Host "Updating repository with git pull..." -ForegroundColor Yellow
+        Run "git -C \"$RepoDir\" pull origin main"
+        
+        # Re-check after pull
+        $stillMissing = @()
+        foreach ($path in $missingPaths) {
+            if (!(Test-Path $path)) {
+                $stillMissing += $path
+            }
+        }
+        
+        if ($stillMissing.Count -gt 0) {
+            Write-Error "Repository update failed. Missing files:"
+            $stillMissing | ForEach-Object { Write-Error "  - $_" }
+            Write-Error "Consider deleting $RepoDir and running this script again."
+            exit 1
+        }
+    }
 }
 
 # Change to repo directory and install Ansible roles

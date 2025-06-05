@@ -1,6 +1,6 @@
 # STIG Pipe - Automated STIG Compliance Pipeline
 
-Automated STIG remediation pipeline using OpenSCAP and Ansible.
+Automated STIG remediation pipeline using OpenSCAP/Ansible (Linux) and PowerSTIG (Windows).
 
 This project is not an official STIG tool. It automates portions of the
 scanning and remediation process, but you must manually review the results
@@ -12,9 +12,11 @@ appropriate for all environments, particularly those without online access.
 **Supported Control Nodes:**
 - Ubuntu 22.04 / Debian 12 / AlmaLinux 9 (Python 3.10-3.12) ✅ **Recommended**
 - Windows 10/11 with WSL2 (Ubuntu 22.04) ✅ **Recommended**
- - Native Windows 10/11 ⚠️ **Limited Support** (see limitations below)
+- Native Windows 10/11 ✅ **Full PowerSTIG Support**
 
-**Important:** Ansible officially supports Linux/macOS control nodes only. Native Windows support may have compatibility issues.
+**Architecture:**
+- **Linux**: OpenSCAP scanning + Ansible remediation
+- **Windows**: PowerSTIG (PowerShell DSC) for native STIG compliance
 
 ## Quick Start
 
@@ -34,7 +36,7 @@ wsl --install -d Ubuntu-22.04
 curl -fsSL https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.sh | sudo bash
 ```
 
-### Native Windows
+### Native Windows (PowerShell as Administrator)
 
 ```powershell
 # Basic STIG remediation
@@ -45,93 +47,156 @@ iex "& { $(irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/boot
 
 # Full hardening mode (includes all security controls)
 iex "& { $(irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1) } -WindowsHardening -HardeningMode Full"
+
+# Dry run to preview changes
+iex "& { $(irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1) } -DryRun"
 ```
+
+**Installation Locations:**
+- **Linux**: `/opt/stig-pipe/` (requires sudo)
+- **Windows**: `C:\stig-pipe\` (requires Administrator)
 
 **Windows Features:**
 - Uses **PowerSTIG** for native Windows STIG compliance
 - No OpenSCAP dependency - pure PowerShell DSC
 - Automatic STIG content management
 - Native CKL file generation for STIG Viewer
-- **NEW**: NIST 800-171 rev2 compliance hardening modules
+- **NIST 800-171 rev2** compliance hardening modules
 
-After cloning the repository or running the bootstrap script, install the Ansible roles:
+## Manual Installation
+
+### Linux
 
 ```bash
+# Clone repository
+sudo git clone https://github.com/NotINeverMe/stig-auto.git /opt/stig-pipe
+sudo chown -R $(whoami):$(whoami) /opt/stig-pipe
+cd /opt/stig-pipe
+
+# Install dependencies
+sudo apt install -y ansible openscap-scanner  # Ubuntu/Debian
+# OR
+sudo dnf install -y ansible openscap-scanner  # RHEL/CentOS/Rocky
+
+# Install Ansible roles
 ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
 ```
 
-This pulls the STIG roles from the Git repositories specified in `ansible/requirements.yml`.
+### Windows
 
-## Overview
+```powershell
+# Clone repository (PowerShell as Administrator)
+git clone https://github.com/NotINeverMe/stig-auto.git C:\stig-pipe
+cd C:\stig-pipe
 
-1. Download SCAP content (Linux) / PowerSTIG handles automatically (Windows)
-2. Run baseline scan
-3. Apply CAT I/II remediation
-4. Verify results
+# Install PowerSTIG module
+Install-Module -Name PowerSTIG -Scope AllUsers -Force
 
-### Windows Implementation
+# Install Ansible (optional, for mixed environments)
+python -m pip install 'ansible-core>=2.17,<2.18'
+ansible-galaxy install -r ansible\requirements.yml --roles-path roles\
+```
 
-On Windows systems, this project uses **PowerSTIG** - Microsoft's official PowerShell DSC module for STIG compliance:
+## Manual Execution
 
-- **Automated STIG Downloads**: PowerSTIG automatically downloads the latest DISA STIGs
-- **DSC-based Remediation**: Uses PowerShell Desired State Configuration for consistent enforcement
-- **Native Integration**: No compatibility issues like OpenSCAP on Windows
-- **CKL Generation**: Creates DISA-compliant checklist files for STIG Viewer
-
-## Manual Steps
-
-Clone the repo, install roles, fetch SCAP content, then run:
+### Linux
 
 ```bash
-./scripts/get_scap_content.sh [--os rhel8]
+cd /opt/stig-pipe
+
+# Download SCAP content
+./scripts/get_scap_content.sh --os rhel8     # or ubuntu22
+
+# Run baseline scan
 ./scripts/scan.sh --baseline
+
+# Apply remediation
 ansible-playbook ansible/remediate.yml -t CAT_I,CAT_II
+
+# Verify results
 ./scripts/verify.sh
 ```
-Use `--os` (Linux) or `-OS` (Windows) to override automatic OS detection when downloading SCAP content.
 
-### Environment Variables
+### Windows
 
-The scanning scripts read the `STIG_PROFILE_ID` environment variable to
-determine which OpenSCAP profile to evaluate. When the variable is not set a
-default profile for the detected operating system is used.
+```powershell
+cd C:\stig-pipe
 
-Example on Linux:
+# Download SCAP content (optional - PowerSTIG handles STIG content automatically)
+.\scripts\get_scap_content.ps1 -OS windows2022
+
+# Run baseline scan (uses PowerSTIG)
+.\scripts\scan.ps1 -Baseline
+
+# Apply remediation
+ansible-playbook ansible\remediate.yml -t CAT_I,CAT_II
+
+# Verify results
+.\scripts\verify.ps1
+```
+
+## Environment Variables
+
+### Linux (OpenSCAP)
+Use `STIG_PROFILE_ID` to override the default OpenSCAP profile:
 
 ```bash
 STIG_PROFILE_ID=xccdf_org.ssgproject.content_profile_ospp ./scripts/scan.sh --baseline
 ```
 
-Example on Windows:
+### Windows (PowerSTIG)
+Use `STIG_PROFILE` for Ansible integration (automatically detected):
 
 ```powershell
-$env:STIG_PROFILE_ID = 'xccdf_org.ssgproject.content_profile_ospp'
-./scripts/scan.ps1 -Baseline
+# Automatically detected: windows2022, windows2019, windows2016
+$env:STIG_PROFILE = 'windows2022'
+.\scripts\scan.ps1 -Baseline
 ```
 
 ## Updates
 
+### Linux
 ```bash
+cd /opt/stig-pipe
 git pull
 ansible-galaxy install -r ansible/requirements.yml --roles-path roles/ --force
 ```
 
+### Windows
+```powershell
+cd C:\stig-pipe
+git pull
+ansible-galaxy install -r ansible\requirements.yml --roles-path roles\ --force
+```
+
 ## Offline Preparation
 
-You can stage content on a machine with internet access and then copy it to an
-offline target.
+### Linux
+Stage content on a machine with internet access:
 
 ```bash
 # Fetch Ansible roles
 ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
 
-# Download SCAP content for the desired OS
-./scripts/get_scap_content.sh --os rhel8
+# Download SCAP content for target OS
+./scripts/get_scap_content.sh --os rhel8      # or ubuntu22
 ```
 
-Transfer the `roles/` and `scap_content/` directories to the offline system
-before running the pipeline. The `--os` flag tells `get_scap_content.sh` exactly
-which content to download.
+Transfer `roles/` and `scap_content/` directories to the offline system.
+
+### Windows
+```powershell
+# Fetch Ansible roles
+ansible-galaxy install -r ansible\requirements.yml --roles-path roles\
+
+# Download SCAP content (optional - PowerSTIG downloads STIGs automatically)
+.\scripts\get_scap_content.ps1 -OS windows2022
+
+# Pre-download PowerSTIG module
+Save-Module -Name PowerSTIG -Path .\offline-modules\
+```
+
+Transfer `roles/`, `scap_content/`, and `offline-modules/` directories to the offline system.
 
 ## Supported Systems
 
@@ -143,7 +208,7 @@ which content to download.
 
 ## Windows NIST 800-171 Hardening
 
-The Windows hardening module provides comprehensive security controls mapped to NIST 800-171 rev2:
+Additional hardening module provides comprehensive security controls mapped to NIST 800-171 rev2:
 
 ### Security Domains Covered
 
@@ -154,9 +219,11 @@ The Windows hardening module provides comprehensive security controls mapped to 
 - **System & Communications Protection** (3.13.x): Encryption, FIPS mode, firewall, protocols
 - **System & Information Integrity** (3.14.x): Anti-malware, updates, threat protection
 
-### Usage
+### Direct Usage
 
 ```powershell
+cd C:\stig-pipe
+
 # Run hardening directly
 .\scripts\windows-hardening\Invoke-WindowsHardening.ps1 -Mode Essential
 
@@ -165,6 +232,9 @@ ansible-playbook ansible\remediate.yml -t windows_hardening
 
 # Dry run mode to preview changes
 .\scripts\windows-hardening\Invoke-WindowsHardening.ps1 -Mode Essential -DryRun
+
+# Full hardening with all controls
+.\scripts\windows-hardening\Invoke-WindowsHardening.ps1 -Mode Full
 ```
 
 ### Hardening Modes
@@ -172,12 +242,33 @@ ansible-playbook ansible\remediate.yml -t windows_hardening
 - **Essential**: Core security controls (password policy, firewall, Windows Defender, audit logging)
 - **Full**: All controls including BitLocker, AppLocker, advanced threat protection
 
+### Integration with Bootstrap
+
+```powershell
+# Automatically includes Windows hardening
+.\bootstrap.ps1 -WindowsHardening -HardeningMode Essential
+
+# Full hardening mode
+.\bootstrap.ps1 -WindowsHardening -HardeningMode Full
+```
+
 ## Output
 
-Reports are saved in the `reports/` directory:
-- `report-baseline-*.html` - Pre-remediation compliance status
-- `report-after-*.html` - Post-remediation verification
-- `windows_hardening_report.html` - NIST 800-171 compliance status (when using -WindowsHardening)
+### Linux Reports (`/opt/stig-pipe/reports/`)
+- `report-baseline-*.html` - Pre-remediation OpenSCAP compliance status
+- `report-after-*.html` - Post-remediation OpenSCAP verification
+- `*.xml` - Raw OpenSCAP ARF results
+
+### Windows Reports (`C:\stig-pipe\reports\`)
+- `report-baseline-*.html` - Pre-remediation PowerSTIG compliance status  
+- `report-after-*.html` - Post-remediation PowerSTIG verification
+- `checklist-*.ckl` - DISA STIG Viewer compatible checklist files
+- `results-*.json` - Machine-readable compliance results
+
+### Windows Hardening Reports (`C:\stig\`)
+- `windows_hardening_report.html` - NIST 800-171 compliance status
+- `windows_hardening.log` - Detailed hardening execution log
+- `pipeline.log` - Complete bootstrap execution log
 
 ## Exit Codes
 
