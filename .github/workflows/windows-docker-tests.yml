@@ -34,6 +34,7 @@ on:
 jobs:
   windows-container-tests:
     runs-on: windows-2022
+    timeout-minutes: 20
     strategy:
       matrix:
         test-type: [unit, powerstig, hardening]
@@ -60,6 +61,7 @@ jobs:
           Write-Host "Docker is ready with Windows containers"
 
       - name: Build Windows Container
+        timeout-minutes: 15
         run: |
           $dockerfile = if ("${{ matrix.container-type }}" -eq "servercore") {
             "docker/windows/Dockerfile.servercore"
@@ -67,8 +69,8 @@ jobs:
             "docker/windows/Dockerfile.server"
           }
 
-          Write-Host "Building container from $dockerfile"
-          docker build -f $dockerfile -t stig-test:${{ matrix.container-type }} .
+          Write-Host "Building container from $dockerfile (this may take up to 15 minutes)..."
+          docker build -f $dockerfile -t stig-test:${{ matrix.container-type }} . --progress=plain
 
       - name: Validate Container Build
         run: |
@@ -77,6 +79,7 @@ jobs:
 
       - name: Run Tests in Container
         id: run-tests
+        timeout-minutes: 10
         run: |
           $testType = "${{ matrix.test-type }}"
           if ("${{ github.event_name }}" -eq "workflow_dispatch" -and `

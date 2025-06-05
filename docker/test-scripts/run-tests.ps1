@@ -62,12 +62,15 @@ function Test-PowerSTIG {
     Write-Host "`n=== Running PowerSTIG Tests ===" -ForegroundColor Cyan
     
     try {
-        # Test PowerSTIG module availability
+        # Test PowerSTIG module availability with timeout
+        Write-Host "Importing PowerSTIG module..." -ForegroundColor Yellow
+        Import-Module PowerSTIG -Force -ErrorAction Stop
+        
         $module = Get-Module PowerSTIG
         if ($module) {
             Write-Host "PowerSTIG Version: $($module.Version)" -ForegroundColor Green
         } else {
-            throw "PowerSTIG module not available"
+            throw "PowerSTIG module not available after import"
         }
         
         # Test PowerSTIG scan script availability

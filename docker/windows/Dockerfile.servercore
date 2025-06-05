@@ -9,18 +9,24 @@ RUN Set-ExecutionPolicy Bypass -Scope Process -Force; `
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; `
     iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 
-# Install dependencies
-RUN choco install -y git python3 --no-progress
+# Install dependencies with timeout and retry
+RUN choco install -y git python3 --no-progress --timeout 300
 
 # Install NuGet package provider first
 RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; `
     Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force; `
     Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
 
-# Install PowerShell modules
-RUN Install-Module -Name PowerSTIG -Force -AllowClobber -SkipPublisherCheck; `
-    Install-Module -Name Pester -Force -SkipPublisherCheck -RequiredVersion 5.5.0; `
-    Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck
+# Install PowerShell modules with optimized settings and timeout handling
+RUN $ProgressPreference = 'SilentlyContinue'; `
+    $ErrorActionPreference = 'Stop'; `
+    Write-Host 'Installing PowerSTIG module (this may take several minutes)...'; `
+    Install-Module -Name PowerSTIG -Force -AllowClobber -SkipPublisherCheck -Verbose:$false; `
+    Write-Host 'Installing Pester module...'; `
+    Install-Module -Name Pester -Force -SkipPublisherCheck -RequiredVersion 5.5.0 -Verbose:$false; `
+    Write-Host 'Installing PSScriptAnalyzer module...'; `
+    Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -Verbose:$false; `
+    Write-Host 'All PowerShell modules installed successfully'
 
 # Create working directory
 WORKDIR C:\stig-auto
@@ -28,12 +34,13 @@ WORKDIR C:\stig-auto
 # Copy repository files
 COPY . .
 
-# Set up Python environment
-# Ensure Python is in PATH and install packages
+# Set up Python environment with optimization
 RUN $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine'); `
+    Write-Host 'Setting up Python environment...'; `
     python --version; `
-    python -m pip install --upgrade pip; `
-    python -m pip install 'ansible-core>=2.17,<2.18' pywinrm
+    python -m pip install --upgrade pip --no-warn-script-location; `
+    python -m pip install 'ansible-core>=2.17,<2.18' pywinrm --no-warn-script-location --disable-pip-version-check; `
+    Write-Host 'Python environment ready'
 
 # Set environment variables
 ENV STIG_PROFILE=windows2022
