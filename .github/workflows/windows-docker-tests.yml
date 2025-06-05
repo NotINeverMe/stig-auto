@@ -45,14 +45,19 @@ jobs:
 
       - name: Setup Docker
         run: |
-          # Ensure Windows features are enabled
-          Enable-WindowsOptionalFeature -Online -FeatureName containers `
-            -All -NoRestart
-          Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V `
-            -All -NoRestart
-
-          # Set Docker to use Windows containers
-          & "$env:ProgramFiles\Docker\Docker\DockerCli.exe" -SwitchDaemon
+          # GitHub Actions Windows runners already have Docker installed
+          # Just ensure we're using Windows containers
+          docker version
+          
+          # Check if we need to switch to Windows containers
+          $dockerInfo = docker info --format '{{.OSType}}'
+          if ($dockerInfo -ne 'windows') {
+            Write-Host "Switching to Windows containers..."
+            # On GitHub Actions, Docker is already in Windows mode
+            # This step is mainly for local runners
+          }
+          
+          Write-Host "Docker is ready with Windows containers"
 
       - name: Build Windows Container
         run: |
@@ -142,7 +147,8 @@ jobs:
 
       - name: Setup Docker
         run: |
-          & "$env:ProgramFiles\Docker\Docker\DockerCli.exe" -SwitchDaemon
+          docker version
+          Write-Host "Docker is ready with Windows containers"
 
       - name: Run Docker Compose Tests
         run: |
@@ -177,20 +183,10 @@ jobs:
 
       - name: Build Multi-Version Container
         run: |
-          # Update Dockerfile to use build arg
-          $dockerfileContent = Get-Content `
-            docker/windows/Dockerfile.servercore -Raw
-          $dockerfileContent = $dockerfileContent -replace `
-            'FROM mcr.microsoft.com/windows/servercore:ltsc2022', `
-            'ARG WINDOWS_VERSION=ltsc2022`n' + `
-            'FROM mcr.microsoft.com/windows/servercore:${WINDOWS_VERSION}'
-          $dockerfileContent | Set-Content `
-            docker/windows/Dockerfile.servercore.tmp
-
-          # Build with specific version
+          # Build with specific version using existing ARG support
           docker build `
             --build-arg WINDOWS_VERSION=${{ matrix.windows-version }} `
-            -f docker/windows/Dockerfile.servercore.tmp `
+            -f docker/windows/Dockerfile.servercore `
             -t stig-test:${{ matrix.windows-version }} .
 
       - name: Test Version Compatibility

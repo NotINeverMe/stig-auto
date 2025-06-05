@@ -50,8 +50,10 @@ validate_powershell() {
     fi
     
     # Check for common syntax issues
-    local open_braces=$(grep -o '{' "$file" | wc -l)
-    local close_braces=$(grep -o '}' "$file" | wc -l)
+    local open_braces
+    local close_braces
+    open_braces=$(grep -o '{' "$file" | wc -l)
+    close_braces=$(grep -o '}' "$file" | wc -l)
     if [ "$open_braces" -ne "$close_braces" ]; then
         echo -e "${RED}Unmatched braces: $open_braces open, $close_braces close${NC}"
         return 1
