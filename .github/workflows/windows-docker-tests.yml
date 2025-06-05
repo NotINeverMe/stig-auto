@@ -175,7 +175,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     strategy:
       matrix:
-        windows-version: [ltsc2022, ltsc2019]
+        # Only test ltsc2022 on GitHub Actions (ltsc2019 not compatible with Windows 2022 runners)
+        windows-version: [ltsc2022]
 
     steps:
       - name: Checkout repository
