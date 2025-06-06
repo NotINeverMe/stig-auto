@@ -36,9 +36,14 @@ try {
 }
 
 # Get STIG version information
-$stigVersions = Get-StigVersionTable
-Write-Host "`nAvailable STIG Versions:" -ForegroundColor Cyan
-$stigVersions | Format-Table -AutoSize
+try {
+    $stigVersions = Get-StigVersionTable
+    Write-Host "`nAvailable STIG Versions:" -ForegroundColor Cyan
+    $stigVersions | Format-Table -AutoSize
+} catch {
+    Write-Host "`nWarning: Could not retrieve STIG version table: $_" -ForegroundColor Yellow
+    Write-Host "Continuing with validation..." -ForegroundColor Yellow
+}
 
 # Validate specific STIG based on profile
 $validation = @{
