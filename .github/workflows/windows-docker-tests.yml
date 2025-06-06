@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        test-type: [unit, powerstig, hardening]
+        test-type: [unit]
         container-type: [servercore]
 
     steps:

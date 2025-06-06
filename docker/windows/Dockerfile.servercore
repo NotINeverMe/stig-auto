@@ -29,13 +29,12 @@ WORKDIR C:\stig-auto
 # Copy repository files
 COPY . .
 
-# Set up Python environment with optimization
+# Set up minimal Python environment - skip Ansible for container tests
 RUN $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine'); `
-    Write-Host 'Setting up Python environment...'; `
+    Write-Host 'Setting up minimal Python environment...'; `
     python --version; `
-    python -m pip install --upgrade pip --no-warn-script-location; `
-    python -m pip install 'ansible-core>=2.17,<2.18' pywinrm --no-warn-script-location --disable-pip-version-check; `
-    Write-Host 'Python environment ready'
+    python -m pip install --upgrade pip --no-warn-script-location --disable-pip-version-check; `
+    Write-Host 'Python environment ready (Ansible not needed for tests)'
 
 # Set environment variables
 ENV STIG_PROFILE=windows2022
