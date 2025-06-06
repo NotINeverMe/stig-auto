@@ -9,9 +9,23 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Ensure output directory exists
-if (-not (Test-Path $OutputDirectory)) {
-    New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+# Set default output directory if not provided
+if (-not $OutputDirectory) {
+    $OutputDirectory = "C:\test-results"
+    Write-Host "Output directory not specified, using default: $OutputDirectory" -ForegroundColor Yellow
+}
+
+# Ensure output directory exists with proper error handling
+try {
+    if (-not (Test-Path $OutputDirectory)) {
+        New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+        Write-Host "Created output directory: $OutputDirectory" -ForegroundColor Green
+    } else {
+        Write-Host "Using existing output directory: $OutputDirectory" -ForegroundColor Green
+    }
+} catch {
+    Write-Error "Failed to create output directory '$OutputDirectory': $_"
+    exit 1
 }
 
 # Set up logging
@@ -37,25 +51,73 @@ try {
 function Test-UnitTests {
     Write-Host "`n=== Running Unit Tests ===" -ForegroundColor Cyan
     
-    $config = New-PesterConfiguration
-    $config.Run.Path = @("C:\stig-auto\tests\windows")
-    $config.Output.Verbosity = if ($Verbose) { "Detailed" } else { "Normal" }
-    $config.TestResult.Enabled = $true
-    $config.TestResult.OutputPath = Join-Path $OutputDirectory "pester-results.xml"
-    $config.TestResult.OutputFormat = "NUnitXml"
-    $config.CodeCoverage.Enabled = $true
-    $config.CodeCoverage.Path = @("C:\stig-auto\scripts\windows-hardening\*.psm1")
-    $config.CodeCoverage.OutputPath = Join-Path $OutputDirectory "coverage.xml"
+    $testResultsFile = Join-Path $OutputDirectory "pester-results.xml"
     
-    $result = Invoke-Pester -Configuration $config
-    
-    if ($result.FailedCount -gt 0) {
-        Write-Warning "Unit tests failed: $($result.FailedCount) test(s) failed"
+    try {
+        $config = New-PesterConfiguration
+        $config.Run.Path = @("C:\stig-auto\tests\windows")
+        $config.Output.Verbosity = if ($Verbose) { "Detailed" } else { "Normal" }
+        $config.TestResult.Enabled = $true
+        $config.TestResult.OutputPath = $testResultsFile
+        $config.TestResult.OutputFormat = "NUnitXml"
+        $config.CodeCoverage.Enabled = $true
+        $config.CodeCoverage.Path = @("C:\stig-auto\scripts\windows-hardening\*.psm1")
+        $config.CodeCoverage.OutputPath = Join-Path $OutputDirectory "coverage.xml"
+        
+        Write-Host "Running Pester tests from: C:\stig-auto\tests\windows" -ForegroundColor Yellow
+        Write-Host "Test results will be saved to: $testResultsFile" -ForegroundColor Yellow
+        
+        $result = Invoke-Pester -Configuration $config
+        
+        # Verify test results file was created
+        if (-not (Test-Path $testResultsFile)) {
+            Write-Warning "Test results file was not created, creating empty results file"
+            # Create minimal valid NUnit XML file
+            $emptyResults = @"
+<?xml version="1.0" encoding="utf-8"?>
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="0" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="$(Get-Date -Format 'yyyy-MM-dd')" time="$(Get-Date -Format 'HH:mm:ss')">
+  <environment user="$env:USERNAME" machine-name="$env:COMPUTERNAME" cwd="$((Get-Location).Path)" user-domain="$env:USERDOMAIN" platform="Windows" />
+  <culture-info current-culture="en-US" current-uiculture="en-US" />
+  <test-suite type="TestFixture" name="Pester" executed="True" result="Success" success="True" time="0.0" asserts="0">
+    <results />
+  </test-suite>
+</test-results>
+"@
+            Set-Content -Path $testResultsFile -Value $emptyResults -Encoding UTF8
+        }
+        
+        if ($result.FailedCount -gt 0) {
+            Write-Warning "Unit tests failed: $($result.FailedCount) test(s) failed"
+            return $false
+        }
+        
+        Write-Host "All unit tests passed!" -ForegroundColor Green
+        Write-Host "Test results saved to: $testResultsFile" -ForegroundColor Gray
+        return $true
+        
+    } catch {
+        Write-Error "Unit test execution failed: $_"
+        
+        # Create error results file
+        $errorResults = @"
+<?xml version="1.0" encoding="utf-8"?>
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="1" errors="1" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="$(Get-Date -Format 'yyyy-MM-dd')" time="$(Get-Date -Format 'HH:mm:ss')">
+  <environment user="$env:USERNAME" machine-name="$env:COMPUTERNAME" cwd="$((Get-Location).Path)" user-domain="$env:USERDOMAIN" platform="Windows" />
+  <culture-info current-culture="en-US" current-uiculture="en-US" />
+  <test-suite type="TestFixture" name="Pester" executed="True" result="Error" success="False" time="0.0" asserts="0">
+    <results>
+      <test-case name="Unit Test Execution" executed="True" result="Error" success="False" time="0.0" asserts="0">
+        <failure>
+          <message><![CDATA[Test execution failed: $_]]></message>
+        </failure>
+      </test-case>
+    </results>
+  </test-suite>
+</test-results>
+"@
+        Set-Content -Path $testResultsFile -Value $errorResults -Encoding UTF8
         return $false
     }
-    
-    Write-Host "All unit tests passed!" -ForegroundColor Green
-    return $true
 }
 
 function Test-PowerSTIG {

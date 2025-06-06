@@ -6,6 +6,23 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Set default output directory if not provided
+if (-not $OutputDirectory) {
+    $OutputDirectory = "C:\test-results"
+    Write-Host "Output directory not specified, using default: $OutputDirectory" -ForegroundColor Yellow
+}
+
+# Ensure output directory exists
+try {
+    if (-not (Test-Path $OutputDirectory)) {
+        New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+        Write-Host "Created output directory: $OutputDirectory" -ForegroundColor Green
+    }
+} catch {
+    Write-Error "Failed to create output directory '$OutputDirectory': $_"
+    exit 1
+}
+
 Write-Host "=== STIG Validation Script ===" -ForegroundColor Cyan
 Write-Host "STIG Profile: $StigProfile" -ForegroundColor Yellow
 Write-Host "Mode: $(if ($CheckOnly) { 'Check Only' } else { 'Full Validation' })" -ForegroundColor Yellow
