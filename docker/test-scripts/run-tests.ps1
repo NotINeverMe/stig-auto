@@ -37,6 +37,20 @@ try {
 function Test-UnitTests {
     Write-Host "`n=== Running Unit Tests ===" -ForegroundColor Cyan
     
+    # Debug output directory
+    Write-Host "Output directory: $OutputDirectory" -ForegroundColor Yellow
+    Write-Host "Test path: C:\stig-auto\tests\windows" -ForegroundColor Yellow
+    
+    if (Test-Path "C:\stig-auto\tests\windows") {
+        Write-Host "Tests directory exists" -ForegroundColor Green
+        Get-ChildItem "C:\stig-auto\tests\windows" | ForEach-Object {
+            Write-Host "  Test file: $($_.Name)" -ForegroundColor Gray
+        }
+    } else {
+        Write-Host "Tests directory not found!" -ForegroundColor Red
+        return $false
+    }
+    
     $config = New-PesterConfiguration
     $config.Run.Path = @("C:\stig-auto\tests\windows")
     $config.Output.Verbosity = if ($Verbose) { "Detailed" } else { "Normal" }
@@ -47,7 +61,19 @@ function Test-UnitTests {
     $config.CodeCoverage.Path = @("C:\stig-auto\scripts\windows-hardening\*.psm1")
     $config.CodeCoverage.OutputPath = Join-Path $OutputDirectory "coverage.xml"
     
+    Write-Host "Expected test results file: $(Join-Path $OutputDirectory "pester-results.xml")" -ForegroundColor Yellow
+    
     $result = Invoke-Pester -Configuration $config
+    
+    # Debug: Check if test results were created
+    $testResultsFile = Join-Path $OutputDirectory "pester-results.xml"
+    if (Test-Path $testResultsFile) {
+        Write-Host "Test results file created: $testResultsFile" -ForegroundColor Green
+        $fileSize = (Get-Item $testResultsFile).Length
+        Write-Host "File size: $fileSize bytes" -ForegroundColor Gray
+    } else {
+        Write-Host "Test results file NOT created: $testResultsFile" -ForegroundColor Red
+    }
     
     if ($result.FailedCount -gt 0) {
         Write-Warning "Unit tests failed: $($result.FailedCount) test(s) failed"

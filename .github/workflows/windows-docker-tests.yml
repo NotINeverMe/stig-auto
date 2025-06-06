@@ -114,6 +114,19 @@ jobs:
             stig-test:${{ matrix.container-type }} `
             -File C:/stig-auto/docker/test-scripts/validate-stig.ps1 -CheckOnly
 
+      - name: Debug Test Results
+        if: always()
+        run: |
+          Write-Host "Checking test results directory..."
+          if (Test-Path "test-results") {
+            Write-Host "test-results directory exists"
+            Get-ChildItem "test-results" -Recurse | ForEach-Object {
+              Write-Host "Found: $($_.FullName)"
+            }
+          } else {
+            Write-Host "test-results directory does not exist"
+          }
+
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
