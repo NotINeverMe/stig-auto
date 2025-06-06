@@ -9,24 +9,19 @@ RUN Set-ExecutionPolicy Bypass -Scope Process -Force; `
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; `
     iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 
-# Install dependencies with timeout and retry
-RUN choco install -y git python3 --no-progress --timeout 300
-
-# Install NuGet package provider first
-RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; `
+# Install dependencies and PowerShell modules in a single layer to reduce build time
+RUN Write-Host 'Installing Chocolatey packages...'; `
+    choco install -y git python3 --no-progress --timeout 600; `
+    Write-Host 'Setting up PowerShell Gallery...'; `
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; `
     Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force; `
-    Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
-
-# Install PowerShell modules with optimized settings and timeout handling
-RUN $ProgressPreference = 'SilentlyContinue'; `
-    $ErrorActionPreference = 'Stop'; `
-    Write-Host 'Installing PowerSTIG module (this may take several minutes)...'; `
+    Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted; `
+    Write-Host 'Installing PowerShell modules...'; `
+    $ProgressPreference = 'SilentlyContinue'; `
     Install-Module -Name PowerSTIG -Force -AllowClobber -SkipPublisherCheck -Verbose:$false; `
-    Write-Host 'Installing Pester module...'; `
     Install-Module -Name Pester -Force -SkipPublisherCheck -RequiredVersion 5.5.0 -Verbose:$false; `
-    Write-Host 'Installing PSScriptAnalyzer module...'; `
     Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -Verbose:$false; `
-    Write-Host 'All PowerShell modules installed successfully'
+    Write-Host 'All dependencies and modules installed successfully'
 
 # Create working directory
 WORKDIR C:\stig-auto

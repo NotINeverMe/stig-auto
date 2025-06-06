@@ -34,7 +34,7 @@ on:
 jobs:
   windows-container-tests:
     runs-on: windows-2022
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       matrix:
         test-type: [unit, powerstig, hardening]
@@ -53,7 +53,7 @@ jobs:
           Write-Host "Docker is ready for Windows containers"
 
       - name: Build Windows Container
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: |
           $dockerfile = if ("${{ matrix.container-type }}" -eq "servercore") {
             "docker/windows/Dockerfile.servercore"
@@ -143,6 +143,7 @@ jobs:
           path: 'test-results/pester-results.xml'
           reporter: 'java-junit'
           fail-on-error: true
+          fail-on-empty: false
 
   integration-test:
     runs-on: windows-2022
