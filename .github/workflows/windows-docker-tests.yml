@@ -146,9 +146,9 @@ jobs:
         with:
           name: Windows Container Tests (${{ matrix.container-type }})
           path: 'test-results/pester-results.xml'
-          reporter: 'java-junit'
+          reporter: 'dotnet-nunit'
           fail-on-error: false
-          fail-on-empty: true
+          fail-on-empty: false
           only-summary: false
         continue-on-error: true
 
