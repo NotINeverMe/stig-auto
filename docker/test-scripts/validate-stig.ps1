@@ -56,10 +56,10 @@ $validation = @{
 try {
     $module = Get-Module -Name PowerSTIG
     $validation.Checks.ModuleAvailable = $true
-    Write-Host "✓ PowerSTIG module is available (v$($module.Version))" -ForegroundColor Green
+    Write-Host "[OK] PowerSTIG module is available (v$($module.Version))" -ForegroundColor Green
 } catch {
     $validation.Issues += "PowerSTIG module not found"
-    Write-Host "✗ PowerSTIG module not available" -ForegroundColor Red
+    Write-Host "[ERROR] PowerSTIG module not available" -ForegroundColor Red
 }
 
 # Check STIG data availability
@@ -69,7 +69,7 @@ try {
     
     if (Test-Path $stigDataPath) {
         $validation.Checks.StigDataAvailable = $true
-        Write-Host "✓ STIG data directory found" -ForegroundColor Green
+        Write-Host "[OK] STIG data directory found" -ForegroundColor Green
         
         # List available STIGs
         $stigFiles = Get-ChildItem -Path $stigDataPath -Filter "*.xml" -Recurse
@@ -77,11 +77,11 @@ try {
         $stigFiles | Select-Object Name, Directory | Format-Table -AutoSize
     } else {
         $validation.Issues += "STIG data directory not found"
-        Write-Host "✗ STIG data directory not found" -ForegroundColor Red
+        Write-Host "[ERROR] STIG data directory not found" -ForegroundColor Red
     }
 } catch {
     $validation.Issues += "Error checking STIG data: $_"
-    Write-Host "✗ Error checking STIG data" -ForegroundColor Red
+    Write-Host "[ERROR] Error checking STIG data" -ForegroundColor Red
 }
 
 # Check DSC resources
@@ -89,7 +89,7 @@ try {
     $dscResources = Get-DscResource -Module PowerSTIG
     if ($dscResources.Count -gt 0) {
         $validation.Checks.DscResourcesAvailable = $true
-        Write-Host "✓ DSC resources available ($($dscResources.Count) resources)" -ForegroundColor Green
+        Write-Host "[OK] DSC resources available ($($dscResources.Count) resources)" -ForegroundColor Green
         
         if (-not $CheckOnly) {
             Write-Host "`nAvailable DSC Resources:" -ForegroundColor Yellow
@@ -97,11 +97,11 @@ try {
         }
     } else {
         $validation.Issues += "No DSC resources found"
-        Write-Host "✗ No DSC resources found" -ForegroundColor Red
+        Write-Host "[ERROR] No DSC resources found" -ForegroundColor Red
     }
 } catch {
     $validation.Issues += "Error checking DSC resources: $_"
-    Write-Host "✗ Error checking DSC resources" -ForegroundColor Red
+    Write-Host "[ERROR] Error checking DSC resources" -ForegroundColor Red
 }
 
 # Test STIG compilation (dry run)
@@ -134,7 +134,7 @@ TestWindowsSTIG -OutputPath '$testPath'
         Invoke-Expression $configScript
         
         if (Test-Path (Join-Path $testPath "localhost.mof")) {
-            Write-Host "✓ STIG compilation successful" -ForegroundColor Green
+            Write-Host "[OK] STIG compilation successful" -ForegroundColor Green
             
             # Analyze the MOF file
             $mofContent = Get-Content (Join-Path $testPath "localhost.mof") -Raw
@@ -142,12 +142,12 @@ TestWindowsSTIG -OutputPath '$testPath'
             Write-Host "  Generated $resourceCount DSC resources" -ForegroundColor Gray
         } else {
             $validation.Issues += "MOF file not generated"
-            Write-Host "✗ STIG compilation failed - no MOF generated" -ForegroundColor Red
+            Write-Host "[ERROR] STIG compilation failed - no MOF generated" -ForegroundColor Red
         }
         
     } catch {
         $validation.Issues += "STIG compilation error: $_"
-        Write-Host "✗ STIG compilation failed: $_" -ForegroundColor Red
+        Write-Host "[ERROR] STIG compilation failed: $_" -ForegroundColor Red
     }
 }
 
