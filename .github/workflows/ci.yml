@@ -107,7 +107,7 @@ jobs:
           Set-ExecutionPolicy Bypass -Scope Process -Force
           # Test individual SCAP content download
           try {
-            ./scripts/get_scap_content.ps1 -OS windows2022
+            & ./scripts/get_scap_content.ps1 -OS windows2022
             if (Test-Path "scap_content/*.xml") {
               Write-Host "SUCCESS: SCAP content downloaded successfully" -ForegroundColor Green
             } else {
@@ -149,7 +149,7 @@ jobs:
         shell: pwsh
         run: |
           Set-ExecutionPolicy Bypass -Scope Process -Force
-          ./bootstrap.ps1 -DryRun
+          & ./bootstrap.ps1 -DryRun
 
   python-compatibility:
     runs-on: windows-latest
