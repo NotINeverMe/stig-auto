@@ -22,7 +22,7 @@ function Get-ValidAuditSubcategories {
     try {
         $result = & auditpol /list /subcategory:* 2>&1
         if ($LASTEXITCODE -eq 0) {
-            return $result | Where-Object { $_ -notlike "*---*" -and $_ -notlike "*Machine Name*" -and $_ -trim -ne "" }
+            return $result | Where-Object { $_ -notlike "*---*" -and $_ -notlike "*Machine Name*" -and $_.Trim() -ne "" }
         }
     } catch {
         Write-Warning "Could not retrieve audit subcategories: $_"

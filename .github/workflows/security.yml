@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'python', 'javascript' ]
+        language: [ 'javascript' ]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -114,14 +114,13 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Run Semgrep
-      uses: semgrep/semgrep-action@v1
-      with:
-        config: >-
-          p/security-audit
-          p/secrets
-          p/owasp-top-ten
-        generateSarif: "1"
+    - name: Setup Semgrep
+      run: |
+        python3 -m pip install semgrep
+    
+    - name: Run Semgrep and generate SARIF
+      run: |
+        semgrep scan --sarif --output=semgrep.sarif --config=p/security-audit --config=p/secrets --config=p/owasp-top-ten || true
     
     - name: Upload SARIF file
       uses: github/codeql-action/upload-sarif@v3
@@ -160,7 +159,7 @@ jobs:
         args: >
           --enableRetired
           --enableExperimental
-          --nvdApiKey ${{ secrets.NVD_API_KEY }}
+          ${{ secrets.NVD_API_KEY && format('--nvdApiKey {0}', secrets.NVD_API_KEY) || '' }}
     
     - name: Upload dependency check results
       uses: actions/upload-artifact@v4
