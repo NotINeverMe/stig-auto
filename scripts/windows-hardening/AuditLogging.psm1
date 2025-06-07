@@ -110,6 +110,7 @@ function Enable-AuditLogging {
                 }
                 
                 foreach ($subcategory in $matches) {
+                    $subcategory = $subcategory.Trim()
                     Write-HardeningLog "Configuring audit policy for: $subcategory" -Level Info
                     
                     # Use the exact subcategory name
