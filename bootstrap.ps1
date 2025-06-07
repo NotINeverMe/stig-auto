@@ -285,7 +285,49 @@ if (!(Test-Path $RepoDir)) {
 
 # Change to repo directory and install Ansible roles
 Run "Set-Location -Path $RepoDir"
-Run 'ansible-galaxy install -r ansible\requirements.yml --roles-path roles\'
+# Handle Ansible on Windows with Python 3.12+ compatibility
+try {
+    # Set environment to avoid blocking IO issues
+    $env:PYTHONUNBUFFERED = "1"
+    $env:ANSIBLE_FORCE_COLOR = "0"
+    
+    # Try running ansible-galaxy
+    Write-Host "Installing Ansible roles..." -ForegroundColor Cyan
+    $galaxyCmd = "& `"$PythonCmd`" -m ansible galaxy install -r ansible\requirements.yml --roles-path roles\"
+    
+    if ($DryRun) {
+        Write-Host "Dry run: Would execute: $galaxyCmd"
+    } else {
+        $result = Invoke-Expression $galaxyCmd 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Ansible galaxy failed with standard method, trying workaround..."
+            
+            # Workaround for Python 3.12+ on Windows
+            $workaroundScript = @'
+import subprocess
+import sys
+import os
+
+os.environ['PYTHONUNBUFFERED'] = '1'
+result = subprocess.run([sys.executable, '-m', 'ansible', 'galaxy', 'install', '-r', 'ansible\\requirements.yml', '--roles-path', 'roles\\'], 
+                       capture_output=True, text=True)
+print(result.stdout)
+if result.stderr:
+    print(result.stderr, file=sys.stderr)
+sys.exit(result.returncode)
+'@
+            
+            $workaroundScript | & $PythonCmd - 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Ansible galaxy installation failed"
+            }
+        }
+        Write-Host "Ansible roles installed successfully" -ForegroundColor Green
+    }
+} catch {
+    Write-Warning "Ansible role installation failed: $_"
+    Write-Warning "This is a known issue with Python 3.13 on Windows. Consider using WSL2 or Python 3.11/3.12"
+}
 
 
 # Execute remediation pipeline
@@ -343,13 +385,46 @@ try {
     
     if (-not $DryRun) {
         Write-Host "==> $AnsiblePlaybook ansible\remediate.yml -t $AnsibleTags"
+        
+        # Set environment to avoid blocking IO issues
+        $env:PYTHONUNBUFFERED = "1"
+        $env:ANSIBLE_FORCE_COLOR = "0"
+        
+        # Try standard execution first
         $ansibleResult = & $AnsiblePlaybook ansible\remediate.yml -t $AnsibleTags 2>&1
         if ($LASTEXITCODE -eq 0) {
             $AnsibleSuccess = $true
             Write-Host "Ansible remediation completed successfully" -ForegroundColor Green
         } else {
             Write-Warning "Ansible remediation failed with exit code $LASTEXITCODE"
-            Write-Warning "Output: $ansibleResult"
+            Write-Warning "Trying Python workaround for Windows compatibility..."
+            
+            # Workaround for Python 3.12+ on Windows
+            $playbookScript = @"
+import subprocess
+import sys
+import os
+
+os.environ['PYTHONUNBUFFERED'] = '1'
+os.environ['ANSIBLE_FORCE_COLOR'] = '0'
+
+# Run ansible-playbook via python module
+result = subprocess.run([sys.executable, '-m', 'ansible', 'playbook', 'ansible\\remediate.yml', '-t', '$AnsibleTags'], 
+                       capture_output=True, text=True)
+print(result.stdout)
+if result.stderr:
+    print(result.stderr, file=sys.stderr)
+sys.exit(result.returncode)
+"@
+            
+            $playbookScript | & $PythonCmd - 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $AnsibleSuccess = $true
+                Write-Host "Ansible remediation completed successfully (via workaround)" -ForegroundColor Green
+            } else {
+                Write-Warning "Ansible remediation failed with both methods"
+                Write-Warning "Output: $ansibleResult"
+            }
         }
     } else {
         Write-Host "==> $AnsiblePlaybook ansible\remediate.yml -t $AnsibleTags"
@@ -474,3 +549,5 @@ $statusSummary = @{
 }
 
 $statusSummary | ConvertTo-Json | Out-File -FilePath "$LogDir\pipeline-status.json" -Encoding UTF8
+
+# Script completed successfully
