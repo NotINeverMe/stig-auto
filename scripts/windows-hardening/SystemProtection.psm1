@@ -132,7 +132,8 @@ function Install-SecurityUpdates {
             }
         )
         
-        foreach ($i, $method in $updateMethods.GetEnumerator()) {
+        for ($i = 0; $i -lt $updateMethods.Count; $i++) {
+            $method = $updateMethods[$i]
             try {
                 Write-HardeningLog "Trying update method $($i + 1)..." -Level Info -NistControl $nistControl
                 $updates = & $method
