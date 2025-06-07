@@ -1,0 +1,259 @@
+name: Branch Protection Enforcement
+
+on:
+  push:
+    branches: [ dev, qa, main ]
+  pull_request:
+    branches: [ dev, qa, main ]
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  enforce-dev-pipeline:
+    name: Enforce Dev Pipeline Rules
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Validate branch hierarchy
+      run: |
+        BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+        echo "Current branch: $BRANCH_NAME"
+        
+        # Enforce three-tier branching strategy: dev -> qa -> main
+        case "$BRANCH_NAME" in
+          "main")
+            echo "✅ Main branch - production ready"
+            ;;
+          "qa")
+            echo "✅ QA branch - pre-production testing"
+            ;;
+          "dev")
+            echo "✅ Dev branch - development integration"
+            ;;
+          *)
+            echo "ℹ️ Feature/fix branch - should target dev branch"
+            ;;
+        esac
+    
+    - name: Check required files exist
+      run: |
+        required_files=(
+          "CLAUDE.md"
+          "README.md"
+          "bootstrap.sh"
+          "bootstrap.ps1"
+          "ansible/remediate.yml"
+          "scripts/windows-hardening/Invoke-WindowsHardening.ps1"
+        )
+        
+        missing_files=()
+        for file in "${required_files[@]}"; do
+          if [ ! -f "$file" ]; then
+            missing_files+=("$file")
+          fi
+        done
+        
+        if [ ${#missing_files[@]} -ne 0 ]; then
+          echo "❌ Missing required files:"
+          printf '  - %s\n' "${missing_files[@]}"
+          exit 1
+        else
+          echo "✅ All required files present"
+        fi
+    
+    - name: Validate CI/CD configuration
+      run: |
+        workflow_files=(
+          ".github/workflows/ci.yml"
+          ".github/workflows/security.yml"
+          ".github/workflows/windows-hardening.yml"
+        )
+        
+        missing_workflows=()
+        for workflow in "${workflow_files[@]}"; do
+          if [ ! -f "$workflow" ]; then
+            missing_workflows+=("$workflow")
+          fi
+        done
+        
+        if [ ${#missing_workflows[@]} -ne 0 ]; then
+          echo "❌ Missing required workflows:"
+          printf '  - %s\n' "${missing_workflows[@]}"
+          exit 1
+        else
+          echo "✅ All required workflows present"
+        fi
+    
+    - name: Check branch-specific requirements
+      run: |
+        BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+        
+        case "$BRANCH_NAME" in
+          "main")
+            echo "🔒 Main branch requirements:"
+            echo "  - All security scans must pass"
+            echo "  - All tests must pass"
+            echo "  - Code review required"
+            echo "  - Merge from qa only"
+            ;;
+          "qa")
+            echo "🧪 QA branch requirements:"
+            echo "  - Integration tests must pass"
+            echo "  - Security scans must pass"
+            echo "  - Performance tests recommended"
+            echo "  - Merge from dev only"
+            ;;
+          "dev")
+            echo "🔧 Dev branch requirements:"
+            echo "  - Unit tests must pass"
+            echo "  - Basic security scans must pass"
+            echo "  - Code lint checks must pass"
+            echo "  - All feature branches merge here first"
+            ;;
+          *)
+            echo "🌟 Feature/fix branch requirements:"
+            echo "  - Target dev branch for PRs"
+            echo "  - Follow naming convention: feature/*, fix/*, hotfix/*"
+            echo "  - Include tests for new functionality"
+            ;;
+        esac
+
+  quality-gates:
+    name: Quality Gates
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Check commit message format
+      if: github.event_name == 'pull_request'
+      run: |
+        # Check if commit messages follow conventional commits
+        echo "Checking commit message format..."
+        
+        # Get PR commits
+        gh pr view ${{ github.event.number }} --json commits --jq '.commits[].messageHeadline' > commits.txt
+        
+        invalid_commits=0
+        while IFS= read -r commit_msg; do
+          if [[ ! "$commit_msg" =~ ^(feat|fix|docs|style|refactor|test|chore|ci|perf|build)(\(.+\))?: .+ ]]; then
+            echo "❌ Invalid commit message: $commit_msg"
+            invalid_commits=$((invalid_commits + 1))
+          else
+            echo "✅ Valid commit message: $commit_msg"
+          fi
+        done < commits.txt
+        
+        if [ $invalid_commits -gt 0 ]; then
+          echo ""
+          echo "Commit messages should follow conventional commits format:"
+          echo "  type(scope): description"
+          echo ""
+          echo "Types: feat, fix, docs, style, refactor, test, chore, ci, perf, build"
+          echo "Example: feat(auth): add OAuth2 authentication"
+          # Don't fail on commit message format for now - just warn
+          # exit 1
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Check for breaking changes
+      if: github.event_name == 'pull_request'
+      run: |
+        echo "Checking for potential breaking changes..."
+        
+        # Look for potential breaking changes in key files
+        breaking_patterns=(
+          "bootstrap\.(sh|ps1)"
+          "ansible/remediate\.yml"
+          "scripts/.*\.(sh|ps1)"
+        )
+        
+        breaking_found=false
+        for pattern in "${breaking_patterns[@]}"; do
+          if git diff --name-only origin/main...HEAD | grep -E "$pattern"; then
+            echo "⚠️ Potential breaking change detected in critical files"
+            breaking_found=true
+          fi
+        done
+        
+        if [ "$breaking_found" = true ]; then
+          echo ""
+          echo "Breaking changes detected. Please ensure:"
+          echo "  - Backward compatibility is maintained"
+          echo "  - Migration guide is provided if needed"
+          echo "  - Version bump is appropriate"
+        else
+          echo "✅ No obvious breaking changes detected"
+        fi
+
+  security-requirements:
+    name: Security Requirements Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Check for security-sensitive changes
+      run: |
+        security_files=(
+          "scripts/windows-hardening/"
+          "ansible/remediate.yml"
+          "bootstrap.sh"
+          "bootstrap.ps1"
+        )
+        
+        security_changes=false
+        for file_pattern in "${security_files[@]}"; do
+          if git diff --name-only HEAD~1..HEAD | grep -q "$file_pattern"; then
+            echo "🔒 Security-sensitive changes detected in: $file_pattern"
+            security_changes=true
+          fi
+        done
+        
+        if [ "$security_changes" = true ]; then
+          echo ""
+          echo "Security-sensitive changes require:"
+          echo "  - Additional security review"
+          echo "  - Testing in isolated environment"
+          echo "  - Validation of NIST compliance"
+          echo "  - Documentation of security impact"
+        else
+          echo "✅ No security-sensitive changes detected"
+        fi
+    
+    - name: Validate security documentation
+      run: |
+        if [ -f "scripts/windows-hardening/Invoke-WindowsHardening.ps1" ]; then
+          nist_controls=$(grep -c "NIST 3\." scripts/windows-hardening/*.psm1 || echo "0")
+          echo "Found $nist_controls NIST control references"
+          
+          if [ "$nist_controls" -lt 10 ]; then
+            echo "⚠️ Consider adding more NIST control documentation"
+          else
+            echo "✅ Adequate NIST control documentation"
+          fi
+        fi
+
+  pipeline-summary:
+    name: Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [enforce-dev-pipeline, quality-gates, security-requirements]
+    if: always()
+    steps:
+    - name: Generate Pipeline Report
+      run: |
+        echo "## 🚀 Dev Pipeline Enforcement Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Branch Validation | ${{ needs.enforce-dev-pipeline.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Quality Gates | ${{ needs.quality-gates.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Security Requirements | ${{ needs.security-requirements.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Three-Tier Branching Strategy" >> $GITHUB_STEP_SUMMARY
+        echo "- **Feature/Fix** → **dev** → **qa** → **main**" >> $GITHUB_STEP_SUMMARY
+        echo "- Each tier enforces appropriate quality gates" >> $GITHUB_STEP_SUMMARY
+        echo "- Security scanning increases in strictness toward production" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,226 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [ main, dev, qa ]
+  pull_request:
+    branches: [ main, dev, qa ]
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6 AM UTC
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'python', 'javascript' ]
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+        queries: security-extended,security-and-quality
+    
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+    
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{matrix.language}}"
+
+  powershell-security:
+    name: PowerShell Security Scan
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install PSScriptAnalyzer
+      shell: pwsh
+      run: |
+        Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck
+        Import-Module PSScriptAnalyzer
+    
+    - name: Run PSScriptAnalyzer Security Rules
+      shell: pwsh
+      run: |
+        $results = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error,Warning -IncludeRule 'PSAvoid*', 'PSUsePSCredentialType', 'PSUseSingularNouns'
+        
+        if ($results) {
+          Write-Host "Security issues found:" -ForegroundColor Red
+          $results | Format-Table -AutoSize
+          
+          # Create SARIF report
+          $results | ConvertTo-Json -Depth 10 | Out-File -FilePath "pssa-results.json"
+          
+          # Fail on Error severity only
+          $errors = $results | Where-Object { $_.Severity -eq 'Error' }
+          if ($errors) {
+            throw "Critical security issues found in PowerShell code"
+          }
+        } else {
+          Write-Host "No critical security issues found" -ForegroundColor Green
+        }
+    
+    - name: Upload PSScriptAnalyzer results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: pssa-results
+        path: pssa-results.json
+
+  bandit-python:
+    name: Python Security (Bandit)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+    
+    - name: Install Bandit
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit[toml]
+    
+    - name: Run Bandit Security Scan
+      run: |
+        bandit -r . -f json -o bandit-results.json || true
+        bandit -r . -f txt
+    
+    - name: Upload Bandit results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: bandit-results
+        path: bandit-results.json
+
+  semgrep:
+    name: Static Analysis (Semgrep)
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Semgrep
+      uses: semgrep/semgrep-action@v1
+      with:
+        config: >-
+          p/security-audit
+          p/secrets
+          p/owasp-top-ten
+        generateSarif: "1"
+    
+    - name: Upload SARIF file
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: semgrep.sarif
+      if: always()
+
+  secret-scan:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Run TruffleHog OSS
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+
+  dependency-check:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run OWASP Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: 'stig-auto'
+        path: '.'
+        format: 'ALL'
+        args: >
+          --enableRetired
+          --enableExperimental
+          --nvdApiKey ${{ secrets.NVD_API_KEY }}
+    
+    - name: Upload dependency check results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: dependency-check-report
+        path: reports/
+
+  compliance-check:
+    name: Security Compliance Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Check for security compliance markers
+      run: |
+        echo "Checking for NIST 800-171 compliance markers..."
+        
+        # Check Windows hardening modules contain NIST references
+        nist_refs=$(grep -r "NIST 3\." scripts/windows-hardening/ | wc -l)
+        echo "Found $nist_refs NIST control references"
+        
+        if [ $nist_refs -lt 10 ]; then
+          echo "ERROR: Insufficient NIST control references found"
+          exit 1
+        fi
+        
+        echo "✅ Security compliance checks passed"
+    
+    - name: Validate security configuration files
+      run: |
+        # Check for security-related configuration
+        if [ ! -f "ansible/remediate.yml" ]; then
+          echo "ERROR: Missing security remediation playbook"
+          exit 1
+        fi
+        
+        if [ ! -d "scripts/windows-hardening" ]; then
+          echo "ERROR: Missing Windows hardening scripts"
+          exit 1
+        fi
+        
+        echo "✅ Security configuration validation passed"
+
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [codeql, powershell-security, bandit-python, semgrep, secret-scan, dependency-check, compliance-check]
+    if: always()
+    steps:
+    - name: Security Scan Summary
+      run: |
+        echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Scan Type | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| CodeQL | ${{ needs.codeql.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| PowerShell Security | ${{ needs.powershell-security.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Python Security (Bandit) | ${{ needs.bandit-python.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Static Analysis (Semgrep) | ${{ needs.semgrep.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Secret Detection | ${{ needs.secret-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Dependency Check | ${{ needs.dependency-check.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Compliance Check | ${{ needs.compliance-check.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY

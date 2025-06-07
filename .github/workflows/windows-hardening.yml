@@ -2,14 +2,14 @@ name: Windows Hardening CI/CD
 
 on:
   push:
-    branches: [ main, develop, feature/powerstig-windows-implementation ]
+    branches: [ main, dev, qa ]
     paths:
       - 'scripts/windows-hardening/**'
       - 'roles/windows-hardening/**'
       - 'tests/windows/**'
       - '.github/workflows/windows-hardening.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev, qa ]
     paths:
       - 'scripts/windows-hardening/**'
       - 'roles/windows-hardening/**'
