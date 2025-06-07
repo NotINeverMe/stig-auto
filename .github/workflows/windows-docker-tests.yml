@@ -149,7 +149,8 @@ jobs:
           reporter: 'java-junit'
           fail-on-error: false
           fail-on-empty: false
-          only-summary: false
+          only-summary: true
+          max-annotations: 0
         continue-on-error: true
 
   integration-test:
