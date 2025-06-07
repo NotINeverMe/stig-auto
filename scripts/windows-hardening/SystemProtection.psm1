@@ -5,6 +5,20 @@
     Implements system and information integrity controls mapped to NIST controls
 #>
 
+# Helper function for logging
+function Write-HardeningLog {
+    param(
+        [string]$Message,
+        [string]$Level = "Info",
+        [string]$NistControl = ""
+    )
+    
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $prefix = if ($NistControl) { "[NIST: $NistControl]" } else { "" }
+    $logMessage = "$timestamp [$Level] $prefix - $Message"
+    Write-Host $logMessage
+}
+
 # Helper function for consistent action execution and logging
 function Invoke-HardeningAction {
     param(
@@ -98,8 +112,18 @@ function Install-SecurityUpdates {
         
         Import-Module PSWindowsUpdate
         
-        # Get available security updates
-        $updates = Get-WindowsUpdate -Category "Security Updates" -NotInstalled
+        # Get available security updates (try different parameter combinations for compatibility)
+        try {
+            $updates = Get-WindowsUpdate -Category "Security Updates" -NotInstalled
+        } catch {
+            Write-Warning "NotInstalled parameter not supported, trying alternative approach..."
+            try {
+                $updates = Get-WindowsUpdate | Where-Object { $_.Status -eq "Available" -and $_.Categories -like "*Security*" }
+            } catch {
+                Write-Warning "Alternative approach failed, trying basic Get-WindowsUpdate..."
+                $updates = Get-WindowsUpdate | Where-Object { $_.Categories -like "*Security*" }
+            }
+        }
         
         if ($updates.Count -eq 0) {
             Write-HardeningLog "No security updates available" -Level Info -NistControl $nistControl
