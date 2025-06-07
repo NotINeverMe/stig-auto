@@ -38,6 +38,10 @@ curl -fsSL https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstra
 
 ### Native Windows (PowerShell as Administrator)
 
+Windows PowerShell must use UTF-8 for Python and Ansible. `bootstrap.ps1`
+automatically runs `chcp 65001` to set the console code page before executing
+any commands.
+
 ```powershell
 # Basic STIG remediation
 iex "& { $(irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1) }"
