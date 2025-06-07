@@ -9,18 +9,19 @@ RUN Set-ExecutionPolicy Bypass -Scope Process -Force; `
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; `
     iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 
-# Install dependencies
-RUN choco install -y git python3 --no-progress
-
-# Install NuGet package provider first
-RUN [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; `
+# Install dependencies and PowerShell modules in a single layer to reduce build time
+RUN Write-Host 'Installing Chocolatey packages...'; `
+    choco install -y git python3 --no-progress --timeout 600; `
+    Write-Host 'Setting up PowerShell Gallery...'; `
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; `
     Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force; `
-    Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
-
-# Install PowerShell modules
-RUN Install-Module -Name PowerSTIG -Force -AllowClobber -SkipPublisherCheck; `
-    Install-Module -Name Pester -Force -SkipPublisherCheck -RequiredVersion 5.5.0; `
-    Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck
+    Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted; `
+    Write-Host 'Installing PowerShell modules...'; `
+    $ProgressPreference = 'SilentlyContinue'; `
+    Install-Module -Name PowerSTIG -Force -AllowClobber -SkipPublisherCheck -Verbose:$false; `
+    Install-Module -Name Pester -Force -SkipPublisherCheck -RequiredVersion 5.5.0 -Verbose:$false; `
+    Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -Verbose:$false; `
+    Write-Host 'All dependencies and modules installed successfully'
 
 # Create working directory
 WORKDIR C:\stig-auto
@@ -28,12 +29,12 @@ WORKDIR C:\stig-auto
 # Copy repository files
 COPY . .
 
-# Set up Python environment
-# Ensure Python is in PATH and install packages
+# Set up minimal Python environment - skip Ansible for container tests
 RUN $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine'); `
+    Write-Host 'Setting up minimal Python environment...'; `
     python --version; `
-    python -m pip install --upgrade pip; `
-    python -m pip install 'ansible-core>=2.17,<2.18' pywinrm
+    python -m pip install --upgrade pip --no-warn-script-location --disable-pip-version-check; `
+    Write-Host 'Python environment ready (Ansible not needed for tests)'
 
 # Set environment variables
 ENV STIG_PROFILE=windows2022
