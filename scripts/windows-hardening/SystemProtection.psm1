@@ -112,16 +112,54 @@ function Install-SecurityUpdates {
         
         Import-Module PSWindowsUpdate
         
-        # Get available security updates (try different parameter combinations for compatibility)
-        try {
-            $updates = Get-WindowsUpdate -Category "Security Updates" -NotInstalled
-        } catch {
-            Write-Warning "NotInstalled parameter not supported, trying alternative approach..."
+        # Get available security updates with comprehensive compatibility handling
+        $updates = $null
+        $updateMethods = @(
+            # Method 1: Try original syntax with Category and NotInstalled
+            { Get-WindowsUpdate -Category "Security Updates" -NotInstalled },
+            # Method 2: Try without NotInstalled parameter
+            { Get-WindowsUpdate -Category "Security Updates" },
+            # Method 3: Try basic command and filter
+            { Get-WindowsUpdate | Where-Object { $_.Categories -like "*Security*" -and $_.IsInstalled -eq $false } },
+            # Method 4: Try even more basic filtering
+            { Get-WindowsUpdate | Where-Object { $_.Categories -like "*Security*" } },
+            # Method 5: Use Windows Update Agent COM interface as fallback
+            { 
+                $updateSession = New-Object -ComObject Microsoft.Update.Session
+                $updateSearcher = $updateSession.CreateUpdateSearcher()
+                $searchResult = $updateSearcher.Search("IsInstalled=0 and Type='Software' and CategoryIDs contains '0FA1201D-4330-4FA8-8AE9-B877473B6441'")
+                return $searchResult.Updates
+            }
+        )
+        
+        for ($i = 0; $i -lt $updateMethods.Count; $i++) {
+            $method = $updateMethods[$i]
             try {
-                $updates = Get-WindowsUpdate | Where-Object { $_.Status -eq "Available" -and $_.Categories -like "*Security*" }
+                Write-HardeningLog "Trying update method $($i + 1)..." -Level Info -NistControl $nistControl
+                $updates = & $method
+                if ($updates -and $updates.Count -gt 0) {
+                    Write-HardeningLog "Successfully retrieved updates using method $($i + 1)" -Level Info -NistControl $nistControl
+                    break
+                } elseif ($updates -and $updates.Count -eq 0) {
+                    Write-HardeningLog "Method $($i + 1) worked but found no updates" -Level Info -NistControl $nistControl
+                    break
+                }
             } catch {
-                Write-Warning "Alternative approach failed, trying basic Get-WindowsUpdate..."
-                $updates = Get-WindowsUpdate | Where-Object { $_.Categories -like "*Security*" }
+                Write-HardeningLog "Method $($i + 1) failed: $_" -Level Warning -NistControl $nistControl
+                continue
+            }
+        }
+        
+        if ($updates -eq $null) {
+            Write-HardeningLog "All update retrieval methods failed, using Windows Update COM interface" -Level Warning -NistControl $nistControl
+            try {
+                $updateSession = New-Object -ComObject Microsoft.Update.Session
+                $updateSearcher = $updateSession.CreateUpdateSearcher()
+                $searchResult = $updateSearcher.Search("IsInstalled=0")
+                $updates = $searchResult.Updates | Where-Object { $_.Categories | Where-Object { $_.Name -like "*Security*" } }
+            } catch {
+                Write-HardeningLog "COM interface also failed: $_" -Level Error -NistControl $nistControl
+                $updates = @()
             }
         }
         

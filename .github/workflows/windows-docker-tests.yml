@@ -72,17 +72,22 @@ jobs:
       - name: Run Tests in Container
         id: run-tests
         timeout-minutes: 10
+        env:
+          MATRIX_TEST_TYPE: ${{ matrix.test-type }}
+          MATRIX_CONTAINER_TYPE: ${{ matrix.container-type }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TEST_TYPE: ${{ github.event.inputs.test_type }}
+          WORKSPACE: ${{ github.workspace }}
         run: |
-          $testType = "${{ matrix.test-type }}"
-          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and `
-              "${{ github.event.inputs.test_type }}") {
-            $testType = "${{ github.event.inputs.test_type }}"
+          $testType = "$env:MATRIX_TEST_TYPE"
+          if ("$env:EVENT_NAME" -eq "workflow_dispatch" -and "$env:INPUT_TEST_TYPE") {
+            $testType = "$env:INPUT_TEST_TYPE"
           }
 
-          Write-Host "Running $testType tests in ${{ matrix.container-type }} container"
+          Write-Host "Running $testType tests in $env:MATRIX_CONTAINER_TYPE container"
 
           # Create local test results directory with proper permissions
-          $testResultsPath = "${{ github.workspace }}/test-results"
+          $testResultsPath = "$env:WORKSPACE/test-results"
           New-Item -ItemType Directory -Force -Path $testResultsPath
           
           # Ensure directory is accessible

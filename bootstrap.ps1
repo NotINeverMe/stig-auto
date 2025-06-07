@@ -135,12 +135,23 @@ Write-Host "Using Python: $PythonCmd"
 # Check for Python 3.13+ Ansible compatibility issues
 $pythonVersionOutput = & $PythonCmd --version 2>&1
 if ($pythonVersionOutput -match "Python 3\.1[3-9]" -or $pythonVersionOutput -match "Python 3\.[2-9][0-9]") {
-    Write-Warning "Python 3.13+ detected. Ansible may have compatibility issues on Windows."
-    Write-Warning "If Ansible commands fail, consider using WSL2 or Python 3.11/3.12."
+    Write-Warning "System Python version $($pythonVersionOutput.Split(' ')[1]) may have compatibility issues with Ansible"
+    # Try to install Python 3.12 for better Ansible compatibility
+    Run "choco install python312 -y --allow-downgrade --force"
     
-    # Set additional compatibility flags for Python 3.13+
-    $env:ANSIBLE_PYTHON_INTERPRETER = $PythonCmd
-    $env:ANSIBLE_HOST_KEY_CHECKING = "False"
+    # Update Python command to use 3.12 if available
+    $Python312Path = "C:\Python312\python.exe"
+    if (Test-Path $Python312Path) {
+        $PythonCmd = $Python312Path
+        Write-Host "Switched to Python 3.12 for better Ansible compatibility: $PythonCmd" -ForegroundColor Green
+    } else {
+        Write-Warning "Could not install Python 3.12, continuing with Python 3.13+"
+        Write-Warning "Ansible commands may fail due to os.get_blocking() Windows compatibility issues"
+        
+        # Set compatibility flags for Python 3.13+
+        $env:ANSIBLE_PYTHON_INTERPRETER = $PythonCmd
+        $env:ANSIBLE_HOST_KEY_CHECKING = "False"
+    }
 }
 
 # Force UTF-8 encoding for Ansible compatibility on Windows
