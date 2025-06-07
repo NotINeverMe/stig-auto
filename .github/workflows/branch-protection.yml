@@ -139,7 +139,7 @@ jobs:
         
         invalid_commits=0
         while IFS= read -r commit_msg; do
-          if [[ ! "$commit_msg" =~ ^(feat|fix|docs|style|refactor|test|chore|ci|perf|build)(\(.+\))?: .+ ]]; then
+          if [[ ! "$commit_msg" =~ ^(feat|fix|docs|style|refactor|test|chore|ci|perf|build)(\(.+\))?:\ .+ ]]; then
             echo "❌ Invalid commit message: $commit_msg"
             invalid_commits=$((invalid_commits + 1))
           else
