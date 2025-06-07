@@ -14,30 +14,9 @@ permissions:
   actions: read
 
 jobs:
-  codeql:
-    name: CodeQL Analysis
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [ 'javascript' ]
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: ${{ matrix.language }}
-        queries: security-extended,security-and-quality
-    
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v3
-    
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
-      with:
-        category: "/language:${{matrix.language}}"
+  # CodeQL analysis disabled - this is primarily a PowerShell/Shell script repository
+  # which is not directly supported by CodeQL
+  # Static analysis is handled by PSScriptAnalyzer and Semgrep instead
 
   powershell-security:
     name: PowerShell Security Scan
@@ -207,7 +186,7 @@ jobs:
   security-summary:
     name: Security Summary
     runs-on: ubuntu-latest
-    needs: [codeql, powershell-security, bandit-python, semgrep, secret-scan, dependency-check, compliance-check]
+    needs: [powershell-security, bandit-python, semgrep, secret-scan, dependency-check, compliance-check]
     if: always()
     steps:
     - name: Security Scan Summary
@@ -216,7 +195,6 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "| Scan Type | Status |" >> $GITHUB_STEP_SUMMARY
         echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
-        echo "| CodeQL | ${{ needs.codeql.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
         echo "| PowerShell Security | ${{ needs.powershell-security.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Python Security (Bandit) | ${{ needs.bandit-python.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Static Analysis (Semgrep) | ${{ needs.semgrep.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY

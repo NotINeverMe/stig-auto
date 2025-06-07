@@ -13,7 +13,7 @@ jobs:
       actions: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Run ShellCheck
         run: |
           docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck-alpine:v0.9.0 \
@@ -61,7 +61,7 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12']  # Skip 3.13 due to Ansible compatibility issues
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
@@ -158,7 +158,7 @@ jobs:
         python-version: ['3.13']
       fail-fast: false  # Continue even if this fails
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:

@@ -3,7 +3,7 @@ name: Windows Docker Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, dev]
     paths:
       - 'scripts/windows-hardening/**'
       - 'scripts/*.ps1'
@@ -34,7 +34,7 @@ on:
 jobs:
   windows-container-tests:
     runs-on: windows-2022
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       matrix:
         test-type: [unit, powerstig, hardening]
@@ -53,7 +53,7 @@ jobs:
           Write-Host "Docker is ready for Windows containers"
 
       - name: Build Windows Container
-        timeout-minutes: 20
+        timeout-minutes: 30
         run: |
           $dockerfile = if ("${{ matrix.container-type }}" -eq "servercore") {
             "docker/windows/Dockerfile.servercore"
