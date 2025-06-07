@@ -89,7 +89,7 @@ ansible-galaxy install -r ansible/requirements.yml --roles-path roles/
 git clone https://github.com/NotINeverMe/stig-auto.git C:\stig-pipe
 cd C:\stig-pipe
 
-# Install PowerSTIG module
+# Install PowerSTIG module (must include the Windows Server 2022 STIG)
 Install-Module -Name PowerSTIG -Scope AllUsers -Force
 
 # Install Ansible (optional, for mixed environments)
@@ -275,6 +275,21 @@ ansible-playbook ansible\remediate.yml -t windows_hardening
 OpenSCAP returns exit code `2` when one or more rules fail. The `scan.sh` and
 `scan.ps1` scripts capture this status and continue running, only exiting if the
 code is something other than `0` or `2`.
+
+## Troubleshooting
+
+### No STIG found for WindowsServer 2022
+
+If `scan.ps1` prints `No STIG found for WindowsServer 2022`, ensure your
+PowerSTIG module contains the Windows Server 2022 STIG. Run the following to
+install the latest module:
+
+```powershell
+Install-Module PowerSTIG -Scope AllUsers -Force
+```
+
+On systems without internet access, manually download the Windows Server 2022
+STIG data and copy it to the PowerSTIG content directory.
 
 ## License
 
