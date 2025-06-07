@@ -5,6 +5,31 @@
     Implements audit and accountability controls mapped to NIST controls
 #>
 
+# Helper function for logging
+function Write-HardeningLog {
+    param(
+        [string]$Message,
+        [string]$Level = "Info"
+    )
+    
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "$timestamp [$Level] - $Message"
+    Write-Host $logMessage
+}
+
+# Helper function for getting valid audit subcategories
+function Get-ValidAuditSubcategories {
+    try {
+        $result = & auditpol /list /subcategory:* 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            return $result | Where-Object { $_ -notlike "*---*" -and $_ -notlike "*Machine Name*" -and $_ -trim -ne "" }
+        }
+    } catch {
+        Write-Warning "Could not retrieve audit subcategories: $_"
+    }
+    return $null
+}
+
 # Helper function for consistent action execution and logging
 function Invoke-HardeningAction {
     param(
@@ -60,26 +85,35 @@ function Enable-AuditLogging {
             "System/System Integrity:Success,Failure"
         )
         
+        # Get valid subcategories first for validation
+        $validSubcategories = Get-ValidAuditSubcategories
+        
         foreach ($category in $auditCategories) {
             try {
                 $parts = $category -split ':'
                 $subcategory = $parts[0]
                 $setting = $parts[1]
                 
-                # Extract just the subcategory name (last part after /)
-                $subcategoryName = $subcategory -replace '.*/', ''
+                Write-HardeningLog "Configuring audit policy for: $subcategory" -Level Info
+                
+                # Validate subcategory exists (case-insensitive)
+                $matchingSubcat = $validSubcategories | Where-Object { $_ -like "*$subcategory*" } | Select-Object -First 1
+                if (-not $matchingSubcat) {
+                    Write-Warning "Subcategory '$subcategory' not found in system. Skipping..."
+                    continue
+                }
                 
                 if ($setting -eq "Success,Failure") {
-                    $result = & auditpol /set /subcategory:$subcategoryName /success:enable /failure:enable 2>&1
+                    $result = & auditpol /set /subcategory:"$subcategory" /success:enable /failure:enable 2>&1
                 }
                 elseif ($setting -eq "Success") {
-                    $result = & auditpol /set /subcategory:$subcategoryName /success:enable /failure:disable 2>&1
+                    $result = & auditpol /set /subcategory:"$subcategory" /success:enable /failure:disable 2>&1
                 }
                 
                 if ($LASTEXITCODE -eq 0) {
-                    Write-Host "Successfully configured audit policy: $subcategoryName" -ForegroundColor Green
+                    Write-Host "Successfully configured audit policy: $subcategory" -ForegroundColor Green
                 } else {
-                    Write-Warning "Failed to configure audit policy '$subcategoryName': $result"
+                    Write-Warning "Failed to configure audit policy '$subcategory': $result"
                 }
             }
             catch {
