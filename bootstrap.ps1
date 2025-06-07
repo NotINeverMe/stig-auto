@@ -19,6 +19,7 @@ $EndReport = Join-Path $LogDir "end_report.txt"
 $RepoDir = "C:\stig-pipe"
 New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
 Start-Transcript -Path $LogFile -Append | Out-Null
+Run 'chcp 65001'
 
 function Run {
     param(
