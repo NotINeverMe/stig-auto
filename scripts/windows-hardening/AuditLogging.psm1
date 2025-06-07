@@ -64,25 +64,25 @@ function Enable-AuditLogging {
     $nistControl = "3.3.1,3.3.2"
     
     Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
-        # Configure audit policy via auditpol
+        # Configure audit policy via auditpol - using exact subcategory names
         $auditCategories = @(
-            "Account Logon/Credential Validation:Success,Failure"
-            "Account Logon/Other Account Logon Events:Success,Failure"
-            "Account Management/User Account Management:Success,Failure"
-            "Account Management/Security Group Management:Success,Failure"
-            "Detailed Tracking/Process Creation:Success"
-            "Detailed Tracking/Process Termination:Success"
-            "Logon/Logoff/Logon:Success,Failure"
-            "Logon/Logoff/Logoff:Success"
-            "Logon/Logoff/Special Logon:Success,Failure"
-            "Object Access/File System:Success,Failure"
-            "Object Access/Registry:Success,Failure"
-            "Policy Change/Audit Policy Change:Success,Failure"
-            "Policy Change/Authentication Policy Change:Success,Failure"
-            "Privilege Use/Sensitive Privilege Use:Success,Failure"
-            "System/Security State Change:Success,Failure"
-            "System/Security System Extension:Success,Failure"
-            "System/System Integrity:Success,Failure"
+            "Credential Validation:Success,Failure"
+            "Kerberos Authentication Service:Success,Failure"
+            "User Account Management:Success,Failure"
+            "Security Group Management:Success,Failure"
+            "Process Creation:Success"
+            "Process Termination:Success"
+            "Logon:Success,Failure"
+            "Logoff:Success"
+            "Special Logon:Success,Failure"
+            "File System:Success,Failure"
+            "Registry:Success,Failure"
+            "Audit Policy Change:Success,Failure"
+            "Authentication Policy Change:Success,Failure"
+            "Sensitive Privilege Use:Success,Failure"
+            "Security State Change:Success,Failure"
+            "Security System Extension:Success,Failure"
+            "System Integrity:Success,Failure"
         )
         
         # Get valid subcategories first for validation

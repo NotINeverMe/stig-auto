@@ -89,8 +89,39 @@ try {
     
     Write-Host "Using STIG: $($availableStigs.Title) v$($availableStigs.StigVersion)"
     
-    # Get the STIG object
-    $stig = Get-Stig -Technology $osInfo.OsType -TechnologyVersion $osInfo.Version
+    # Get the STIG object using the available STIG information
+    try {
+        $stig = Get-Stig -Technology $availableStigs.TechnologyRole -TechnologyVersion $availableStigs.TechnologyVersion
+    } catch {
+        Write-Host "Trying alternative STIG retrieval methods..." -ForegroundColor Yellow
+        
+        # Try different parameter combinations
+        $stigMethods = @(
+            @{ Technology = $osInfo.OsType; TechnologyVersion = $osInfo.Version },
+            @{ Technology = 'WindowsServer'; TechnologyVersion = '2022' },
+            @{ Technology = 'WindowsServer'; TechnologyVersion = '2019' },
+            @{ Technology = $availableStigs.TechnologyRole; TechnologyVersion = $availableStigs.TechnologyVersion }
+        )
+        
+        $stig = $null
+        foreach ($method in $stigMethods) {
+            try {
+                Write-Host "Trying: Technology=$($method.Technology), Version=$($method.TechnologyVersion)" -ForegroundColor Gray
+                $stig = Get-Stig -Technology $method.Technology -TechnologyVersion $method.TechnologyVersion
+                if ($stig) {
+                    Write-Host "Successfully retrieved STIG using Technology=$($method.Technology), Version=$($method.TechnologyVersion)" -ForegroundColor Green
+                    break
+                }
+            } catch {
+                Write-Host "Failed: $_" -ForegroundColor Gray
+                continue
+            }
+        }
+        
+        if (-not $stig) {
+            throw "Could not retrieve STIG object with any method"
+        }
+    }
     
     # Generate checklist (CKL file) for current state
     $cklPath = "reports\checklist-$Mode-$Timestamp.ckl"

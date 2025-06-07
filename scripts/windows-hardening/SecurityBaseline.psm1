@@ -138,7 +138,7 @@ function Set-FIPSMode {
     }
     
     if ($currentValue -eq 1) {
-        Write-Host "FIPS mode is already enabled" -ForegroundColor Green
+        Write-HardeningLog "FIPS mode is already enabled" -Level Success -NistControl $nistControl
         return $true
     }
     
