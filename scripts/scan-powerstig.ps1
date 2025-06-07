@@ -63,6 +63,7 @@ try {
     }
     
     # Get available STIG with flexible matching
+    # First try exact match
     $availableStigs = $allStigs | Where-Object {
         $_.TechnologyRole -eq $osInfo.OsType -and 
         ($_.TechnologyVersion -eq $osInfo.Version -or 
@@ -70,11 +71,30 @@ try {
          $_.TechnologyVersion -like "*$($osInfo.Version)*")
     } | Sort-Object -Property StigVersion -Descending | Select-Object -First 1
     
-    # If no exact match, try broader search for Windows Server
+    # If no exact match for Windows Server 2022, try various naming conventions
+    if (-not $availableStigs -and $osInfo.Version -eq '2022') {
+        Write-Host "Trying alternative naming conventions for Windows Server 2022..." -ForegroundColor Yellow
+        
+        # Try different variations
+        $searchPatterns = @('2022', 'Server2022', 'Server 2022', 'WS2022', 'WindowsServer2022')
+        foreach ($pattern in $searchPatterns) {
+            $availableStigs = $allStigs | Where-Object {
+                ($_.TechnologyRole -like '*Server*' -or $_.TechnologyRole -eq 'WindowsServer') -and
+                ($_.TechnologyVersion -like "*$pattern*" -or $_.Title -like "*$pattern*")
+            } | Sort-Object -Property StigVersion -Descending | Select-Object -First 1
+            
+            if ($availableStigs) {
+                Write-Host "Found STIG using pattern: $pattern" -ForegroundColor Green
+                break
+            }
+        }
+    }
+    
+    # If still no match, try looking for any Windows Server STIG
     if (-not $availableStigs -and $osInfo.OsType -eq 'WindowsServer') {
-        Write-Host "No exact version match, trying broader search for Windows Server..." -ForegroundColor Yellow
+        Write-Host "No exact version match, trying any Windows Server STIG..." -ForegroundColor Yellow
         $availableStigs = $allStigs | Where-Object {
-            $_.TechnologyRole -eq 'WindowsServer'
+            $_.TechnologyRole -like '*Server*' -or $_.TechnologyRole -eq 'WindowsServer'
         } | Sort-Object -Property StigVersion -Descending | Select-Object -First 1
     }
     

@@ -65,59 +65,70 @@ function Enable-AuditLogging {
     
     Invoke-HardeningAction -Description $description -NistControl $nistControl -DryRun:$DryRun -Action {
         # Configure audit policy via auditpol - using exact subcategory names
-        $auditCategories = @(
-            "Credential Validation:Success,Failure"
-            "Kerberos Authentication Service:Success,Failure"
-            "User Account Management:Success,Failure"
-            "Security Group Management:Success,Failure"
-            "Process Creation:Success"
-            "Process Termination:Success"
-            "Logon:Success,Failure"
-            "Logoff:Success"
-            "Special Logon:Success,Failure"
-            "File System:Success,Failure"
-            "Registry:Success,Failure"
-            "Audit Policy Change:Success,Failure"
-            "Authentication Policy Change:Success,Failure"
-            "Sensitive Privilege Use:Success,Failure"
-            "Security State Change:Success,Failure"
-            "Security System Extension:Success,Failure"
-            "System Integrity:Success,Failure"
-        )
-        
-        # Get valid subcategories first for validation
+        # First, let's get the actual valid subcategories
         $validSubcategories = Get-ValidAuditSubcategories
         
-        foreach ($category in $auditCategories) {
+        # Map our desired categories to actual Windows subcategory names
+        $auditCategories = @(
+            @{Pattern = "*Credential Validation*"; Setting = "Success,Failure"}
+            @{Pattern = "*Kerberos*"; Setting = "Success,Failure"}
+            @{Pattern = "*User Account Management*"; Setting = "Success,Failure"}
+            @{Pattern = "*Security Group Management*"; Setting = "Success,Failure"}
+            @{Pattern = "*Process Creation*"; Setting = "Success"}
+            @{Pattern = "*Process Termination*"; Setting = "Success"}
+            @{Pattern = "*Logon*"; Setting = "Success,Failure"; Exclude = "*Logoff*,*Special*"}
+            @{Pattern = "*Logoff*"; Setting = "Success"}
+            @{Pattern = "*Special Logon*"; Setting = "Success,Failure"}
+            @{Pattern = "*File System*"; Setting = "Success,Failure"}
+            @{Pattern = "*Registry*"; Setting = "Success,Failure"}
+            @{Pattern = "*Audit Policy Change*"; Setting = "Success,Failure"}
+            @{Pattern = "*Authentication Policy Change*"; Setting = "Success,Failure"}
+            @{Pattern = "*Sensitive Privilege Use*"; Setting = "Success,Failure"}
+            @{Pattern = "*Security State Change*"; Setting = "Success,Failure"}
+            @{Pattern = "*Security System Extension*"; Setting = "Success,Failure"}
+            @{Pattern = "*System Integrity*"; Setting = "Success,Failure"}
+        )
+        
+        if (-not $validSubcategories) {
+            Write-Warning "Could not retrieve audit subcategories. Skipping audit configuration."
+            return
+        }
+        
+        foreach ($categoryConfig in $auditCategories) {
             try {
-                $parts = $category -split ':'
-                $subcategory = $parts[0]
-                $setting = $parts[1]
-                
-                Write-HardeningLog "Configuring audit policy for: $subcategory" -Level Info
-                
-                # Validate subcategory exists (case-insensitive)
-                $matchingSubcat = $validSubcategories | Where-Object { $_ -like "*$subcategory*" } | Select-Object -First 1
-                if (-not $matchingSubcat) {
-                    Write-Warning "Subcategory '$subcategory' not found in system. Skipping..."
-                    continue
+                # Find matching subcategories
+                $matches = $validSubcategories | Where-Object { 
+                    $_ -like $categoryConfig.Pattern
                 }
                 
-                if ($setting -eq "Success,Failure") {
-                    $result = & auditpol /set /subcategory:"$subcategory" /success:enable /failure:enable 2>&1
-                }
-                elseif ($setting -eq "Success") {
-                    $result = & auditpol /set /subcategory:"$subcategory" /success:enable /failure:disable 2>&1
+                # Apply exclusions if specified
+                if ($categoryConfig.Exclude) {
+                    $excludePatterns = $categoryConfig.Exclude -split ','
+                    foreach ($excludePattern in $excludePatterns) {
+                        $matches = $matches | Where-Object { $_ -notlike $excludePattern.Trim() }
+                    }
                 }
                 
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Host "Successfully configured audit policy: $subcategory" -ForegroundColor Green
-                } else {
-                    Write-Warning "Failed to configure audit policy '$subcategory': $result"
+                foreach ($subcategory in $matches) {
+                    Write-HardeningLog "Configuring audit policy for: $subcategory" -Level Info
+                    
+                    # Use the exact subcategory name
+                    if ($categoryConfig.Setting -eq "Success,Failure") {
+                        $result = & auditpol /set /subcategory:"$subcategory" /success:enable /failure:enable 2>&1
+                    }
+                    elseif ($categoryConfig.Setting -eq "Success") {
+                        $result = & auditpol /set /subcategory:"$subcategory" /success:enable /failure:disable 2>&1
+                    }
+                    
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Host "Successfully configured audit policy: $subcategory" -ForegroundColor Green
+                    } else {
+                        Write-Warning "Failed to configure audit policy '$subcategory': $result"
+                    }
                 }
             }
             catch {
-                Write-Warning "Error configuring audit policy for '$subcategory': $_"
+                Write-Warning "Error processing audit category pattern '$($categoryConfig.Pattern)': $_"
             }
         }
         

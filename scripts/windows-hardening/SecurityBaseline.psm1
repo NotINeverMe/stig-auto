@@ -138,7 +138,7 @@ function Set-FIPSMode {
     }
     
     if ($currentValue -eq 1) {
-        Write-HardeningLog "FIPS mode is already enabled" -Level Success -NistControl $nistControl
+        Write-Host "FIPS mode is already enabled" -ForegroundColor Green
         return $true
     }
     
@@ -147,7 +147,7 @@ function Set-FIPSMode {
             New-Item -Path $registryPath -Force | Out-Null
         }
         Set-ItemProperty -Path $registryPath -Name Enabled -Value 1 -Type DWord
-        Write-HardeningLog "FIPS mode enabled. System restart required." -Level Warning -NistControl $nistControl
+        Write-Host "FIPS mode enabled. System restart required." -ForegroundColor Yellow
     }
 }
 
