@@ -143,6 +143,9 @@ else {
     exit 1
 }
 
+# Track implemented controls for reporting
+$script:ImplementedControls = @{}
+
 # Execute each hardening task
 foreach ($task in $tasksToRun) {
     $functionName = $task.Function
@@ -151,7 +154,16 @@ foreach ($task in $tasksToRun) {
     Write-HardeningLog "Executing: $functionName" -NistControl $nistControl
     
     if (Get-Command $functionName -ErrorAction SilentlyContinue) {
-        & $functionName -DryRun:$DryRun
+        $result = Invoke-HardeningAction -Action {
+            & $functionName -DryRun:$DryRun
+        } -Description $functionName -NistControl $nistControl
+        
+        # Track NIST controls implementation status
+        if ($result) {
+            $nistControl.Split(',') | ForEach-Object {
+                $script:ImplementedControls[$_.Trim()] = "Implemented"
+            }
+        }
     }
     else {
         Write-HardeningLog "Function not found: $functionName" -Level Warning
@@ -160,7 +172,7 @@ foreach ($task in $tasksToRun) {
 
 # Generate compliance report
 Write-HardeningLog "Generating compliance report..."
-Export-ComplianceReport -ReportPath $ReportPath -SuccessCount $script:SuccessCount -FailureCount $script:FailureCount
+Export-ComplianceReport -ReportPath $ReportPath -SuccessCount $script:SuccessCount -FailureCount $script:FailureCount -ImplementedControls $script:ImplementedControls
 
 # Summary
 $summary = @"

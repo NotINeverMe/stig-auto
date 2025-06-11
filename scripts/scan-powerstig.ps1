@@ -23,28 +23,45 @@ try {
     exit 1
 }
 
-# Determine OS and STIG version
+# Determine OS and STIG version with role detection
 function Get-OSInfo {
     $os = Get-CimInstance Win32_OperatingSystem
     $caption = $os.Caption
     
+    # Detect server role (DC vs MS)
+    $computerSystem = Get-CimInstance Win32_ComputerSystem
+    $isDomainController = ($env:COMPUTERNAME -like '*DC*') -or ($computerSystem.DomainRole -ge 4)
+    $role = if ($isDomainController) { 'DC' } else { 'MS' }
+    
     if ($caption -match 'Windows 10') {
-        return @{ OsType = 'WindowsClient'; Version = '10.0' }
+        return @{ OsType = 'WindowsClient'; Version = '10.0'; Role = $null }
     } elseif ($caption -match 'Windows 11') {
-        return @{ OsType = 'WindowsClient'; Version = '11.0' }
+        return @{ OsType = 'WindowsClient'; Version = '11.0'; Role = $null }
     } elseif ($caption -match 'Windows Server 2022') {
-        return @{ OsType = 'WindowsServer'; Version = '2022' }
+        return @{ OsType = 'WindowsServer'; Version = '2022'; Role = $role }
     } elseif ($caption -match 'Windows Server 2019') {
-        return @{ OsType = 'WindowsServer'; Version = '2019' }
+        return @{ OsType = 'WindowsServer'; Version = '2019'; Role = $role }
     } elseif ($caption -match 'Windows Server 2016') {
-        return @{ OsType = 'WindowsServer'; Version = '2016' }
+        return @{ OsType = 'WindowsServer'; Version = '2016'; Role = $role }
     } else {
         throw "Unsupported OS: $caption"
     }
 }
 
 $osInfo = Get-OSInfo
-Write-Host "Detected OS: $($osInfo.OsType) $($osInfo.Version)"
+Write-Host "Detected OS: $($osInfo.OsType) $($osInfo.Version) Role: $($osInfo.Role)"
+
+# Check for cached STIG selection
+$stigCacheFile = "reports\.stig-cache.json"
+$cachedStig = $null
+if (Test-Path $stigCacheFile) {
+    try {
+        $cachedStig = Get-Content $stigCacheFile | ConvertFrom-Json
+        Write-Host "Found cached STIG selection: $($cachedStig.Technology) $($cachedStig.Version) v$($cachedStig.StigVersion)" -ForegroundColor Cyan
+    } catch {
+        Write-Host "Cached STIG file corrupted, will re-select" -ForegroundColor Yellow
+    }
+}
 
 # Create reports directory
 New-Item -ItemType Directory -Force -Path "reports" | Out-Null
@@ -63,28 +80,35 @@ try {
     }
     
     # Get available STIG with flexible matching
-    # First try exact match
+    # First try exact match - filter for Benchmark releases only
     $availableStigs = $allStigs | Where-Object {
         $_.TechnologyRole -eq $osInfo.OsType -and 
         ($_.TechnologyVersion -eq $osInfo.Version -or 
          $_.TechnologyVersion -eq $osInfo.Version.ToString() -or
-         $_.TechnologyVersion -like "*$($osInfo.Version)*")
+         $_.TechnologyVersion -like "*$($osInfo.Version)*") -and
+        $_.ReleaseType -eq 'Benchmark'  # Only use official benchmark releases
     } | Sort-Object -Property StigVersion -Descending | Select-Object -First 1
     
     # If no exact match for Windows Server 2022, try various naming conventions
     if (-not $availableStigs -and $osInfo.Version -eq '2022') {
         Write-Host "Trying alternative naming conventions for Windows Server 2022..." -ForegroundColor Yellow
         
-        # Try different variations
-        $searchPatterns = @('2022', 'Server2022', 'Server 2022', 'WS2022', 'WindowsServer2022')
+        # Try different variations including MS (Member Server) and DC (Domain Controller)
+        # Prioritize detected role first
+        $searchPatterns = if ($osInfo.Role) {
+            @($osInfo.Role, 'MS', 'DC', '2022', 'Server2022', 'Server 2022', 'WS2022', 'WindowsServer2022')
+        } else {
+            @('MS', 'DC', '2022', 'Server2022', 'Server 2022', 'WS2022', 'WindowsServer2022')
+        }
         foreach ($pattern in $searchPatterns) {
             $availableStigs = $allStigs | Where-Object {
-                ($_.TechnologyRole -like '*Server*' -or $_.TechnologyRole -eq 'WindowsServer') -and
-                ($_.TechnologyVersion -like "*$pattern*" -or $_.Title -like "*$pattern*")
+                ($_.TechnologyRole -like '*Server*' -or $_.TechnologyRole -eq 'WindowsServer' -or $_.TechnologyRole -eq 'MS' -or $_.TechnologyRole -eq 'DC') -and
+                ($_.TechnologyVersion -like "*$pattern*" -or $_.TechnologyVersion -eq '2022' -or $_.Title -like "*$pattern*") -and
+                $_.ReleaseType -eq 'Benchmark'  # Only use official benchmark releases
             } | Sort-Object -Property StigVersion -Descending | Select-Object -First 1
             
             if ($availableStigs) {
-                Write-Host "Found STIG using pattern: $pattern" -ForegroundColor Green
+                Write-Host "Found STIG using pattern: $pattern - $($availableStigs.TechnologyRole) $($availableStigs.TechnologyVersion)" -ForegroundColor Green
                 break
             }
         }
@@ -109,6 +133,17 @@ try {
     
     Write-Host "Using STIG: $($availableStigs.Title) v$($availableStigs.StigVersion)"
     
+    # Cache the STIG selection for deterministic future runs
+    $stigCache = @{
+        Technology = $availableStigs.TechnologyRole
+        Version = $availableStigs.TechnologyVersion
+        StigVersion = $availableStigs.StigVersion
+        StigID = $availableStigs.Id
+        SelectedDate = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    }
+    $stigCache | ConvertTo-Json | Out-File -FilePath $stigCacheFile -Encoding UTF8
+    Write-Host "Cached STIG selection for future runs" -ForegroundColor Green
+    
     # Get the STIG object using the available STIG information
     try {
         $stig = Get-Stig -Technology $availableStigs.TechnologyRole -TechnologyVersion $availableStigs.TechnologyVersion
@@ -119,6 +154,8 @@ try {
         $stigMethods = @(
             @{ Technology = $osInfo.OsType; TechnologyVersion = $osInfo.Version },
             @{ Technology = 'WindowsServer'; TechnologyVersion = '2022' },
+            @{ Technology = 'MS'; TechnologyVersion = '2022' },
+            @{ Technology = 'DC'; TechnologyVersion = '2022' },
             @{ Technology = 'WindowsServer'; TechnologyVersion = '2019' },
             @{ Technology = $availableStigs.TechnologyRole; TechnologyVersion = $availableStigs.TechnologyVersion }
         )

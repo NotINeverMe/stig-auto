@@ -10,7 +10,8 @@ function Export-ComplianceReport {
     param(
         [string]$ReportPath = "C:\Windows\Temp\WindowsHardening_Report.html",
         [int]$SuccessCount = 0,
-        [int]$FailureCount = 0
+        [int]$FailureCount = 0,
+        [hashtable]$ImplementedControls = @{}
     )
     
     $reportDate = Get-Date -Format "yyyy-MM-dd HH:mm:ss"

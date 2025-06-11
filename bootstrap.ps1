@@ -14,6 +14,10 @@ param(
     [string]$Branch = 'main'
 )
 
+# Enable strict error handling for pipeline hygiene
+$ErrorActionPreference = 'Stop'
+$PSModuleAutoLoadingPreference = 'None'  # Prevent automatic module loading for deterministic runs
+
 # Directory for pipeline logs and summary report
 $LogDir = "C:\stig"
 $LogFile = Join-Path $LogDir "pipeline.log"
@@ -173,15 +177,22 @@ Run "$PythonCmd -m pip install 'ansible-core>=2.17,<2.18'"
 Write-Host "Installing PowerSTIG module for native Windows STIG compliance..." -ForegroundColor Cyan
 if (-not $DryRun) {
     # Install PowerSTIG from PowerShell Gallery
-    if (!(Get-Module -ListAvailable -Name PowerSTIG)) {
+    # Pin to a known-good PowerSTIG version for deterministic builds
+    $powerStigVersion = "4.26.0"  # Update as needed for newer stable releases
+    
+    $installedModule = Get-Module -ListAvailable -Name PowerSTIG | Where-Object { $_.Version -eq $powerStigVersion }
+    if ($installedModule) {
+        Write-Host "PowerSTIG module v$powerStigVersion already installed"
+    } else {
         try {
+            Write-Host "Installing PowerSTIG v$powerStigVersion (pinned version for consistency)"
+            Install-Module -Name PowerSTIG -RequiredVersion $powerStigVersion -Scope AllUsers -Force -AllowClobber -ErrorAction Stop
+            Write-Host "PowerSTIG module v$powerStigVersion installed successfully" -ForegroundColor Green
+        } catch {
+            Write-Warning "PowerSTIG v$powerStigVersion installation failed, trying latest version"
             Install-Module -Name PowerSTIG -Scope AllUsers -Force -AllowClobber -ErrorAction Stop
             Write-Host "PowerSTIG module installed successfully" -ForegroundColor Green
-        } catch {
-            Write-Warning "PowerSTIG installation failed"
         }
-    } else {
-        Write-Host "PowerSTIG module already installed"
     }
     
     # Install Posh-STIG for CKL file manipulation (optional but useful)
@@ -343,6 +354,8 @@ import sys
 import os
 
 os.environ['PYTHONUNBUFFERED'] = '1'
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+os.environ['PYTHONUTF8'] = '1'
 result = subprocess.run([sys.executable, '-m', 'ansible', 'galaxy', 'install', '-r', 'ansible\\requirements.yml', '--roles-path', 'roles\\'], 
                        capture_output=True, text=True)
 print(result.stdout)
@@ -420,9 +433,11 @@ try {
     if (-not $DryRun) {
         Write-Host "==> $AnsiblePlaybook ansible\remediate.yml -t $AnsibleTags"
         
-        # Set environment to avoid blocking IO issues
+        # Set environment to avoid blocking IO issues and fix UTF-8 encoding
         $env:PYTHONUNBUFFERED = "1"
         $env:ANSIBLE_FORCE_COLOR = "0"
+        $env:PYTHONIOENCODING = "utf-8"
+        $env:PYTHONUTF8 = "1"
         
         # Try standard execution first
         $ansibleResult = & $AnsiblePlaybook ansible\remediate.yml -t $AnsibleTags 2>&1
@@ -441,6 +456,8 @@ import os
 
 os.environ['PYTHONUNBUFFERED'] = '1'
 os.environ['ANSIBLE_FORCE_COLOR'] = '0'
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+os.environ['PYTHONUTF8'] = '1'
 
 # Run ansible-playbook via python module
 result = subprocess.run([sys.executable, '-m', 'ansible', 'playbook', 'ansible\\remediate.yml', '-t', '$AnsibleTags'], 
@@ -472,6 +489,24 @@ catch {
 
 Write-Host "Verifying remediation..."
 Run '.\\scripts\\verify.ps1'
+
+# Security gating - fail pipeline on critical findings
+Write-Host "Running security gate analysis..."
+try {
+    $latestReport = Get-ChildItem "reports\results-after-*.json" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($latestReport) {
+        Run ".\\scripts\\check-critical-findings.ps1 -ReportPath '$($latestReport.FullName)' -FailOnCatI"
+        Write-Host "Security gate passed - no critical violations" -ForegroundColor Green
+    } else {
+        Write-Warning "No scan results found for security gating"
+    }
+} catch {
+    Write-Warning "Security gate analysis failed: $_"
+    if (-not $DryRun) {
+        Write-Error "Pipeline failed security gate"
+        exit 1
+    }
+}
 
 # Optional: Run standalone Windows hardening
 if ($WindowsHardening) {
