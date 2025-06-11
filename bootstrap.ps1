@@ -327,20 +327,27 @@ function Invoke-GitUpdate {
             $currentBranch = & git branch --show-current 2>&1
             if ($LASTEXITCODE -eq 0 -and $currentBranch -ne $Branch) {
                 Write-Host "==> git checkout $Branch"
-                $checkoutResult = & git checkout $Branch 2>&1
+                $checkoutResult = & git checkout $Branch 2>&1 | Out-String
                 if ($LASTEXITCODE -ne 0) {
-                    Write-Host "Git checkout failed: $($checkoutResult -join "`n")" -ForegroundColor Yellow
+                    Write-Host "Git checkout failed: $checkoutResult" -ForegroundColor Yellow
                     Write-Host "Continuing with current branch..." -ForegroundColor Yellow
+                } else {
+                    Write-Host "Switched to branch $Branch" -ForegroundColor Green
                 }
             }
             
             Write-Host "==> git pull origin $Branch"
-            $pullResult = & git pull origin $Branch 2>&1
+            $pullResult = & git pull origin $Branch 2>&1 | Out-String
             if ($LASTEXITCODE -ne 0) {
-                Write-Host "Git pull failed: $($pullResult -join "`n")" -ForegroundColor Yellow
+                Write-Host "Git pull failed: $pullResult" -ForegroundColor Yellow
                 Write-Host "Continuing with existing files..." -ForegroundColor Yellow
             } else {
                 Write-Host "Repository updated successfully from $Branch branch" -ForegroundColor Green
+                # Only show pull result if there were actual changes
+                if ($pullResult -notmatch "Already up to date" -and $pullResult.Trim()) {
+                    Write-Host "Changes pulled:" -ForegroundColor Cyan
+                    Write-Host $pullResult.Trim() -ForegroundColor Gray
+                }
             }
         } finally {
             Set-Location $OriginalLocation
