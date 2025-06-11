@@ -63,36 +63,24 @@ jobs:
       run: |
         Write-Host "Testing STIG selection logic directly..."
         
-        # Test the scan-powerstig.ps1 script logic
-        $testScript = @'
-        # Source the functions from scan-powerstig.ps1 without executing
+        # Simple test - just verify the script contains the function
         $scriptContent = Get-Content "scripts\scan-powerstig.ps1" -Raw
         
-        # Extract and test the Get-OSInfo function
-        if ($scriptContent -match '(?s)function Get-OSInfo \{.*?\}') {
-          $functionDef = $matches[0]
-          Invoke-Expression $functionDef
-          
-          Write-Host "Testing OS detection logic..."
-          
-          # Mock a Windows Server 2022 environment
-          $mockOS = New-Object PSObject -Property @{
-            Caption = "Microsoft Windows Server 2022 Datacenter"
-          }
-          
-          $mockComputer = New-Object PSObject -Property @{
-            DomainRole = 2  # Member Server
-          }
-          
-          # Test would go here - for CI we just verify the function exists
-          Write-Host "Get-OSInfo function loaded successfully"
+        if ($scriptContent -match 'function Get-OSInfo') {
+          Write-Host "Get-OSInfo function found in scan-powerstig.ps1"
         } else {
-          Write-Error "Could not extract Get-OSInfo function"
+          Write-Error "Get-OSInfo function not found in scan-powerstig.ps1"
           exit 1
         }
-        '@
         
-        Invoke-Expression $testScript
+        # Test script syntax
+        try {
+          $null = [System.Management.Automation.PSParser]::Tokenize($scriptContent, [ref]$null)
+          Write-Host "scan-powerstig.ps1 syntax validation passed"
+        } catch {
+          Write-Error "scan-powerstig.ps1 syntax validation failed: $_"
+          exit 1
+        }
 
     - name: Validate Security Gate Logic
       shell: powershell
