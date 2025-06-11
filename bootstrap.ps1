@@ -216,116 +216,193 @@ if (-not $DryRun) {
     }
 }
 
-# Clone repo to the repository directory if not present
-if (!(Test-Path $RepoDir)) {
-    Write-Host "Cloning repository to C:\stig-pipe (branch: $Branch)"
-    if (-not $DryRun) {
-        Write-Host "==> git clone -b $Branch https://github.com/NotINeverMe/stig-auto.git `"$RepoDir`""
-        $cloneResult = & git clone -b $Branch https://github.com/NotINeverMe/stig-auto.git $RepoDir 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "Git clone failed: $cloneResult"
-            exit 1
-        }
-    } else {
-        Write-Host "==> git clone -b $Branch https://github.com/NotINeverMe/stig-auto.git `"$RepoDir`""
-    }
+# Enhanced git repository handling with better directory detection and error handling
+$CurrentLocation = Get-Location
+$IsInTargetDir = ($CurrentLocation.Path -eq $RepoDir)
+$RepoExists = (Test-Path $RepoDir) -and (Test-Path (Join-Path $RepoDir ".git"))
+
+function Test-GitRepository {
+    param([string]$Path)
+    return (Test-Path $Path) -and (Test-Path (Join-Path $Path ".git")) -and 
+           (Get-ChildItem $Path -Force | Where-Object { $_.Name -ne ".git" } | Measure-Object).Count -gt 0
+}
+
+function Invoke-GitClone {
+    param(
+        [string]$Branch,
+        [string]$TargetDir,
+        [bool]$DryRun
+    )
     
-    # Verify critical directories were cloned (only in non-dry-run mode)
+    $RepoUrl = "https://github.com/NotINeverMe/stig-auto.git"
+    $ParentDir = Split-Path $TargetDir -Parent
+    $DirName = Split-Path $TargetDir -Leaf
+    
+    Write-Host "Cloning repository to $TargetDir (branch: $Branch)" -ForegroundColor Cyan
+    
     if (-not $DryRun) {
-        $CriticalPaths = @(
-            "$RepoDir\scripts\windows-hardening",
-            "$RepoDir\ansible\remediate.yml",
-            "$RepoDir\scripts\scan.ps1"
-        )
+        # Save current location
+        $OriginalLocation = Get-Location
         
-        foreach ($path in $CriticalPaths) {
-            if (!(Test-Path $path)) {
-                Write-Error "Critical file/directory missing after clone: $path"
-                Write-Error "Clone may have failed or been incomplete. Please verify network connectivity and try again."
-                exit 1
+        try {
+            # If we're in the target directory, move to parent to perform clone
+            if ($IsInTargetDir) {
+                Write-Host "Currently in target directory, moving to parent for clone operation..." -ForegroundColor Yellow
+                Set-Location $ParentDir
+                
+                # Remove existing directory if it exists but is not a proper git repo
+                if (Test-Path $TargetDir) {
+                    Write-Host "Removing existing directory for clean clone..." -ForegroundColor Yellow
+                    Remove-Item -Path $TargetDir -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            }
+            
+            Write-Host "==> git clone -b $Branch $RepoUrl `"$TargetDir`""
+            $cloneResult = & git clone -b $Branch $RepoUrl $TargetDir 2>&1
+            
+            if ($LASTEXITCODE -ne 0) {
+                # Use Write-Host instead of Write-Error to prevent PowerShell code parsing
+                Write-Host "Git clone failed with exit code $LASTEXITCODE" -ForegroundColor Red
+                Write-Host "Error details: $($cloneResult -join "`n")" -ForegroundColor Red
+                
+                # Try alternative approach: clone to temp directory then move
+                $TempDir = "$ParentDir\stig-auto-temp-$(Get-Random)"
+                Write-Host "Attempting alternative clone to temporary directory..." -ForegroundColor Yellow
+                
+                $tempCloneResult = & git clone -b $Branch $RepoUrl $TempDir 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "Temporary clone successful, moving to target directory..." -ForegroundColor Green
+                    if (Test-Path $TargetDir) {
+                        Remove-Item -Path $TargetDir -Recurse -Force -ErrorAction SilentlyContinue
+                    }
+                    Move-Item -Path $TempDir -Destination $TargetDir -Force
+                    Write-Host "Repository moved successfully to $TargetDir" -ForegroundColor Green
+                } else {
+                    Write-Host "Alternative clone also failed: $($tempCloneResult -join "`n")" -ForegroundColor Red
+                    Write-Host "Please check network connectivity and try again." -ForegroundColor Yellow
+                    exit 1
+                }
+            } else {
+                Write-Host "Repository cloned successfully" -ForegroundColor Green
+            }
+        } finally {
+            # Restore original location if we changed it
+            if ($IsInTargetDir -and (Test-Path $TargetDir)) {
+                Set-Location $TargetDir
+            } elseif ($OriginalLocation) {
+                Set-Location $OriginalLocation
             }
         }
-        Write-Host "Repository cloned successfully with all required files" -ForegroundColor Green
     } else {
-        Write-Host "Dry run: Skipping clone verification"
+        Write-Host "==> git clone -b $Branch $RepoUrl `"$TargetDir`" (dry run)"
     }
-} else {
-    Write-Host "Repository already exists at $RepoDir"
+}
+
+function Invoke-GitUpdate {
+    param(
+        [string]$Branch,
+        [string]$RepoDir,
+        [bool]$DryRun
+    )
     
-    # Pull latest changes from the repository
     Write-Host "Updating repository with latest changes from $Branch branch..." -ForegroundColor Cyan
+    
     if (-not $DryRun) {
-        Push-Location $RepoDir
+        $OriginalLocation = Get-Location
+        
         try {
+            Set-Location $RepoDir
+            
+            # Check if it's a valid git repository
+            $isGitRepo = & git rev-parse --is-inside-work-tree 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "Directory exists but is not a valid git repository. Re-cloning..." -ForegroundColor Yellow
+                Set-Location $OriginalLocation
+                Remove-Item -Path $RepoDir -Recurse -Force -ErrorAction SilentlyContinue
+                Invoke-GitClone -Branch $Branch -TargetDir $RepoDir -DryRun $DryRun
+                return
+            }
+            
             # Switch to the specified branch if not already on it
             $currentBranch = & git branch --show-current 2>&1
-            if ($currentBranch -ne $Branch) {
+            if ($LASTEXITCODE -eq 0 -and $currentBranch -ne $Branch) {
                 Write-Host "==> git checkout $Branch"
                 $checkoutResult = & git checkout $Branch 2>&1
                 if ($LASTEXITCODE -ne 0) {
-                    Write-Warning "Git checkout failed: $checkoutResult"
-                    Write-Warning "Continuing with current branch..."
+                    Write-Host "Git checkout failed: $($checkoutResult -join "`n")" -ForegroundColor Yellow
+                    Write-Host "Continuing with current branch..." -ForegroundColor Yellow
                 }
             }
             
             Write-Host "==> git pull origin $Branch"
             $pullResult = & git pull origin $Branch 2>&1
             if ($LASTEXITCODE -ne 0) {
-                Write-Warning "Git pull failed: $pullResult"
-                Write-Warning "Continuing with existing files..."
+                Write-Host "Git pull failed: $($pullResult -join "`n")" -ForegroundColor Yellow
+                Write-Host "Continuing with existing files..." -ForegroundColor Yellow
             } else {
                 Write-Host "Repository updated successfully from $Branch branch" -ForegroundColor Green
             }
         } finally {
-            Pop-Location
+            Set-Location $OriginalLocation
         }
     } else {
         Write-Host "==> git pull origin $Branch (dry run)"
     }
+}
+
+# Main repository handling logic
+if (-not $RepoExists) {
+    Invoke-GitClone -Branch $Branch -TargetDir $RepoDir -DryRun $DryRun
+} else {
+    Write-Host "Repository already exists at $RepoDir" -ForegroundColor Green
+    Invoke-GitUpdate -Branch $Branch -RepoDir $RepoDir -DryRun $DryRun
+}
+
+# Verify critical directories exist (only in non-dry-run mode)
+if (-not $DryRun) {
+    $CriticalPaths = @(
+        "$RepoDir\scripts\windows-hardening",
+        "$RepoDir\ansible\remediate.yml",
+        "$RepoDir\scripts\scan.ps1"
+    )
     
-    # Verify critical paths exist even if repo was already present (only in non-dry-run mode)
-    if (-not $DryRun) {
-        $CriticalPaths = @(
-            "$RepoDir\scripts\windows-hardening",
-            "$RepoDir\ansible\remediate.yml", 
-            "$RepoDir\scripts\scan.ps1"
-        )
+    $missingPaths = @()
+    foreach ($path in $CriticalPaths) {
+        if (!(Test-Path $path)) {
+            $missingPaths += $path
+        }
+    }
+    
+    if ($missingPaths.Count -gt 0) {
+        Write-Host "Repository is missing critical files:" -ForegroundColor Yellow
+        $missingPaths | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
+        Write-Host "Attempting to re-clone repository..." -ForegroundColor Yellow
         
-        $missingPaths = @()
+        # Remove and re-clone if critical files are missing
+        if (Test-Path $RepoDir) {
+            Remove-Item -Path $RepoDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        Invoke-GitClone -Branch $Branch -TargetDir $RepoDir -DryRun $false
+        
+        # Re-check after re-clone
+        $stillMissing = @()
         foreach ($path in $CriticalPaths) {
             if (!(Test-Path $path)) {
-                $missingPaths += $path
+                $stillMissing += $path
             }
         }
         
-        if ($missingPaths.Count -gt 0) {
-            Write-Warning "Existing repository is missing critical files:"
-            $missingPaths | ForEach-Object { Write-Warning "  - $_" }
-            Write-Host "Updating repository with git pull..." -ForegroundColor Yellow
-            Write-Host "==> git -C `"$RepoDir`" pull origin main"
-            $pullResult = & git -C $RepoDir pull origin main 2>&1
-            if ($LASTEXITCODE -ne 0) {
-                Write-Warning "Git pull failed: $pullResult"
-            }
-            
-            # Re-check after pull
-            $stillMissing = @()
-            foreach ($path in $missingPaths) {
-                if (!(Test-Path $path)) {
-                    $stillMissing += $path
-                }
-            }
-            
-            if ($stillMissing.Count -gt 0) {
-                Write-Error "Repository update failed. Missing files:"
-                $stillMissing | ForEach-Object { Write-Error "  - $_" }
-                Write-Error "Consider deleting $RepoDir and running this script again."
-                exit 1
-            }
+        if ($stillMissing.Count -gt 0) {
+            Write-Host "Repository re-clone failed. Missing files:" -ForegroundColor Red
+            $stillMissing | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
+            Write-Host "Please check network connectivity and try again." -ForegroundColor Red
+            exit 1
         }
-    } else {
-        Write-Host "Dry run: Skipping repository validation"
     }
+    
+    Write-Host "All required repository files are present" -ForegroundColor Green
+} else {
+    Write-Host "Dry run: Skipping repository validation" -ForegroundColor Yellow
 }
 
 # Change to repo directory and install Ansible roles
