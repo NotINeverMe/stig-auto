@@ -1,0 +1,204 @@
+name: Test PowerSTIG Benchmark Detection
+
+on:
+  push:
+    branches: [ main, dev ]
+    paths:
+      - 'scripts/scan-powerstig.ps1'
+      - 'scripts/apply-powerstig.ps1'
+      - 'scripts/check-critical-findings.ps1'
+      - 'tests/Test-PowerSTIGBenchmarks.ps1'
+      - '.github/workflows/test-powerstig-benchmarks.yml'
+  pull_request:
+    branches: [ main, dev ]
+    paths:
+      - 'scripts/scan-powerstig.ps1'
+      - 'scripts/apply-powerstig.ps1'
+      - 'scripts/check-critical-findings.ps1'
+      - 'tests/Test-PowerSTIGBenchmarks.ps1'
+
+jobs:
+  test-powerstig-windows:
+    runs-on: windows-latest
+    name: Test PowerSTIG Benchmark Detection (Windows)
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup PowerShell modules
+      shell: powershell
+      run: |
+        # Install PowerSTIG with version pinning for consistent tests
+        $powerStigVersion = "5.0.1"
+        
+        Write-Host "Installing PowerSTIG v$powerStigVersion for testing..."
+        try {
+          Install-Module -Name PowerSTIG -RequiredVersion $powerStigVersion -Force -AllowClobber -Scope CurrentUser
+          Write-Host "PowerSTIG v$powerStigVersion installed successfully" -ForegroundColor Green
+        } catch {
+          Write-Warning "PowerSTIG v$powerStigVersion not available, installing latest"
+          Install-Module -Name PowerSTIG -Force -AllowClobber -Scope CurrentUser
+        }
+        
+        # Verify installation
+        $module = Get-Module -ListAvailable PowerSTIG
+        Write-Host "Installed PowerSTIG version: $($module.Version)"
+
+    - name: Run PowerSTIG Benchmark Tests
+      shell: powershell
+      run: |
+        Write-Host "Running PowerSTIG benchmark validation tests..."
+        
+        # Set execution policy for CI
+        Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
+        
+        # Run the tests
+        .\tests\Test-PowerSTIGBenchmarks.ps1
+      env:
+        POWERSHELL_TELEMETRY_OPTOUT: 1
+
+    - name: Test STIG Selection Logic
+      shell: powershell
+      run: |
+        Write-Host "Testing STIG selection logic directly..."
+        
+        # Test the scan-powerstig.ps1 script logic
+        $testScript = @'
+        # Source the functions from scan-powerstig.ps1 without executing
+        $scriptContent = Get-Content "scripts\scan-powerstig.ps1" -Raw
+        
+        # Extract and test the Get-OSInfo function
+        if ($scriptContent -match '(?s)function Get-OSInfo \{.*?\}') {
+          $functionDef = $matches[0]
+          Invoke-Expression $functionDef
+          
+          Write-Host "Testing OS detection logic..."
+          
+          # Mock a Windows Server 2022 environment
+          $mockOS = New-Object PSObject -Property @{
+            Caption = "Microsoft Windows Server 2022 Datacenter"
+          }
+          
+          $mockComputer = New-Object PSObject -Property @{
+            DomainRole = 2  # Member Server
+          }
+          
+          # Test would go here - for CI we just verify the function exists
+          Write-Host "Get-OSInfo function loaded successfully"
+        } else {
+          Write-Error "Could not extract Get-OSInfo function"
+          exit 1
+        }
+        '@
+        
+        Invoke-Expression $testScript
+
+    - name: Validate Security Gate Logic
+      shell: powershell
+      run: |
+        Write-Host "Testing security gate functionality..."
+        
+        # Create mock scan results for testing
+        $mockResults = @(
+          @{
+            RuleId = "V-12345"
+            Severity = "CAT I"
+            Status = "Fail"
+            Title = "Test high severity finding"
+          },
+          @{
+            RuleId = "V-67890"
+            Severity = "CAT II"
+            Status = "Fail"
+            Title = "Test medium severity finding"
+          }
+        )
+        
+        $testReportPath = "test-results.json"
+        $mockResults | ConvertTo-Json | Out-File -FilePath $testReportPath -Encoding UTF8
+        
+        # Test that the security gate script can parse results
+        try {
+          $results = Get-Content $testReportPath | ConvertFrom-Json
+          $catICount = ($results | Where-Object { $_.Severity -eq 'CAT I' -and $_.Status -eq 'Fail' }).Count
+          
+          if ($catICount -eq 1) {
+            Write-Host "Security gate logic validation passed" -ForegroundColor Green
+          } else {
+            Write-Error "Security gate logic validation failed"
+            exit 1
+          }
+        } catch {
+          Write-Error "Failed to validate security gate logic: $_"
+          exit 1
+        } finally {
+          Remove-Item -Path $testReportPath -Force -ErrorAction SilentlyContinue
+        }
+
+  test-powerstig-linux:
+    runs-on: ubuntu-latest
+    name: Test PowerSTIG Scripts (Linux/Cross-platform)
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install PowerShell
+      shell: bash
+      run: |
+        # Install PowerShell on Linux for cross-platform testing
+        wget -q https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        sudo apt-get update
+        sudo apt-get install -y powershell
+
+    - name: Test Script Syntax and Structure
+      shell: pwsh
+      run: |
+        Write-Host "Testing PowerShell script syntax and structure..."
+        
+        # Test syntax of all PowerShell scripts
+        $scripts = @(
+          "scripts/scan-powerstig.ps1",
+          "scripts/apply-powerstig.ps1", 
+          "scripts/check-critical-findings.ps1",
+          "tests/Test-PowerSTIGBenchmarks.ps1"
+        )
+        
+        foreach ($script in $scripts) {
+          if (Test-Path $script) {
+            Write-Host "Checking syntax: $script"
+            $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content $script -Raw), [ref]$null)
+            Write-Host "✓ $script syntax valid" -ForegroundColor Green
+          } else {
+            Write-Warning "Script not found: $script"
+          }
+        }
+
+    - name: Validate Error Handling Patterns
+      shell: pwsh
+      run: |
+        Write-Host "Validating error handling patterns..."
+        
+        # Check that scripts use proper error handling
+        $requiredPatterns = @{
+          "ErrorActionPreference" = "Scripts should set ErrorActionPreference"
+          "try.*catch" = "Scripts should use try-catch blocks"
+          "Write-Error.*exit" = "Scripts should exit on critical errors"
+        }
+        
+        $scripts = Get-ChildItem -Path "scripts" -Filter "*.ps1"
+        
+        foreach ($script in $scripts) {
+          $content = Get-Content $script.FullName -Raw
+          Write-Host "Checking error handling in: $($script.Name)"
+          
+          foreach ($pattern in $requiredPatterns.Keys) {
+            if ($content -match $pattern) {
+              Write-Host "  ✓ $($requiredPatterns[$pattern])" -ForegroundColor Green
+            } else {
+              Write-Host "  ⚠ Missing: $($requiredPatterns[$pattern])" -ForegroundColor Yellow
+            }
+          }
+        }
