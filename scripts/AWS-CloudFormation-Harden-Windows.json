@@ -1,0 +1,1507 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Microsoft Office Online Stack - This template creates three Windows 2019 servers - 1 Office Online Server, 1 Windows Active Directory and 1 Windows Jumpbox.",
+  "Parameters": {
+    "DomainAdminUser": {
+      "Description": "User name for the account that will be added as Domain Administrator. This is separate from the default \"Administrator\" account",
+      "Type": "String",
+      "Default": "oosadminuser"
+    },
+    "DomainAdminUserPassword": {
+      "Description": "Reference to the AdminPassword in SSM parameter store",
+      "Type": "AWS::SSM::Parameter::Value<String>",
+      "Default": "oos-password"
+    },
+    "DomainDNSName": {
+      "Description": "Fully qualified domain name (FQDN) of the forest root domain",
+      "Type": "String",
+      "Default": "us.cocoondatacloud.com"
+    },
+    "InternalWebFarmURL": {
+      "Description": "The Internal URL of the OfficeWebAppsFarm",
+      "Type": "String",
+      "Default": "https://oos.us.cocoondatacloud.com"
+    },
+    "ExternalWebFarmURL": {
+      "Description": "The External URL of the OfficeWebAppsFarm",
+      "Type": "String",
+      "Default": "https://oos.us.cocoondatacloud.com"
+    },
+    "DomainNetBiosName": {
+      "Description": "Netbios name for the domain",
+      "Type": "String",
+      "Default": "uscocooncloud"
+    },
+    "OfficeOnlineEC2InstanceAMI": {
+      "Description": "Enter the Amazon Image ID to be used to launch the Windows Server EC2 Instance (eg: Microsoft Windows Server 2019 Core for STIG compliance)",
+      "Type": "AWS::EC2::Image::Id",
+      "Default": "ami-086afcc40e9365fff"
+    },
+    "OfficeOnlineNATInstanceAMI": {
+      "Description": "Enter the Amazon Image ID to be used to launch the Windows Jumpbox/NAT Instance (eg: Microsoft Windows Server 2019 Core for STIG compliance)",
+      "Type": "AWS::EC2::Image::Id",
+      "Default": "ami-086afcc40e9365fff"
+    },
+    "OfficeOnlineADInstanceAMI": {
+      "Description": "Enter the Amazon Image ID to be used to launch the Windows Server EC2 Instance for AD setup (eg: Microsoft Windows Server 2019 Core for STIG compliance)",
+      "Type": "AWS::EC2::Image::Id",
+      "Default": "ami-086afcc40e9365fff"
+    },
+    "ec2KeyPair": {
+      "Description": "Select an existing EC2 KeyPair to enable RDP access to the Windows Instances",
+      "Type": "AWS::EC2::KeyPair::KeyName"
+    },
+    "SSLCertificateARN": {
+      "Description": "Enter the SSL Certificate ARN to be used with the Load Balancer",
+      "Type": "String",
+      "Default": "arn:aws-us-gov:acm:us-gov-west-1:851601850830:certificate/ca820e3e-b986-4fae-91d4-0645bbea9ff7"
+    },
+    "AvailabilityZone": {
+      "Description": "Select the Availability Zone from the drop-down menu",
+      "Type": "AWS::EC2::AvailabilityZone::Name",
+      "Default": "us-gov-west-1b"
+    },
+    "VpcCIDR": {
+      "Description": "Enter the VPC - CIDR OR Keep the default value as shown",
+      "Type": "String",
+      "Default": "172.31.0.0/16"
+    },
+    "PublicSubnetCIDR": {
+      "Description": "Enter the Office Online Public Subnet - CIDR OR Keep the default value as shown",
+      "Type": "String",
+      "Default": "172.31.0.0/24"
+    },
+    "PrivateSubnetCIDR": {
+      "Description": "Enter the Office Online Private Subnet - CIDR OR Keep the default value as shown",
+      "Type": "String",
+      "Default": "172.31.1.0/24"
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "VpcCIDR"
+        },
+        "EnableDnsSupport": "true",
+        "EnableDnsHostnames": "true",
+        "InstanceTenancy": "default",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "VPC for MS Office Online STIG"
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "IGW for MS Office Online STIG"
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnetCIDR"
+        },
+        "AvailabilityZone": {
+          "Ref": "AvailabilityZone"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OfficeOnlinePublicSubnet STIG"
+          }
+        ]
+      }
+    },
+    "PrivateSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnetCIDR"
+        },
+        "AvailabilityZone": {
+          "Ref": "AvailabilityZone"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OfficeOnlinePrivateSubnet STIG"
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "PublicSubnetRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PrivateSubnetRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "IGWRouteforPublicRouteTable": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "S3ReadRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/"
+      }
+    },
+    "S3InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [
+          {
+            "Ref": "S3ReadRole"
+          }
+        ]
+      }
+    },
+    "S3RolePolicies": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "S3ReadRole",
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:Get*",
+                "s3:List*"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "S3ReadRole"
+          }
+        ]
+      }
+    },
+    "NATInstance": {
+      "Type": "AWS::EC2::Instance",
+      "DependsOn": "AttachGateway",
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "configSets": {
+            "config": [
+              "harden",
+              "download-stig-tools"
+            ]
+          },
+          "harden": {
+            "files": {
+              "c:\\cfn\\scripts\\Harden-Device.ps1": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "$acl = Get-Acl -Path C:\\Windows\\System32\\winevt\\Logs\\*.evtx;",
+                      "$AccessRule = New-Object System.Security.Principal.NTAccount('NT AUTHORITY\\Authenticated Users');",
+                      "$acl.PurgeAccessRules($AccessRule);",
+                      "Rename-LocalUser -Name Guest -NewName StigUser;",
+                      "Rename-LocalUser -Name Administrator -NewName StigAdmin;",
+                      "New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\FipsAlgorithmPolicy' -Name 'Enabled' -Value 1 -PropertyType DWORD -Force;"
+                    ]
+                  ]
+                }
+              }
+            },
+            "commands": {
+              "run-script": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -ExecutionPolicy RemoteSigned -Command c:\\cfn\\scripts\\Harden-Device.ps1"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              },
+              "install-aws-cli": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              },
+              "download-stig-tools": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "aws s3 cp s3://govcloud-oos/STIG_TOOLS.zip C:/Scripts/stig_tools/STIG_TOOLS.zip",
+                      "; powershell.exe Expand-Archive C:/Scripts/stig_tools/STIG_TOOLS.zip -DestinationPath C:/Scripts/stig_tools/"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "ImageId": {
+          "Ref": "OfficeOnlineNATInstanceAMI"
+        },
+        "InstanceType": "t2.small",
+        "KeyName": {
+          "Ref": "ec2KeyPair"
+        },
+        "SourceDestCheck": "false",
+        "NetworkInterfaces": [
+          {
+            "GroupSet": [
+              {
+                "Ref": "NatSecurityGroup"
+              }
+            ],
+            "AssociatePublicIpAddress": "true",
+            "DeviceIndex": "0",
+            "DeleteOnTermination": "true",
+            "SubnetId": {
+              "Ref": "PublicSubnet"
+            }
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "<script>\n",
+                "cfn-init.exe -v -c config -s ",
+                {
+                  "Ref": "AWS::StackId"
+                },
+                " -r NATInstance",
+                " --region ",
+                {
+                  "Ref": "AWS::Region"
+                },
+                "\n",
+                "</script>\n"
+              ]
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OfficeOnline-jumpbox STIG"
+          },
+          {
+            "Key": "environment",
+            "Value": "STIG"
+          },
+          {
+            "Key": "amazon-inspector",
+            "Value": "true"
+          },
+          {
+            "Key": "Compliance",
+            "Value": "FedRAMP"
+          }
+        ]
+      }
+    },
+    "NATInstanceElasticIP": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "InstanceId": {
+          "Ref": "NATInstance"
+        }
+      }
+    },
+    "NatGateway": {
+      "DependsOn": "AttachGateway",
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATGatewayElasticIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Office Online NAT Gateway STIG"
+          }
+        ]
+      }
+    },
+    "NATGatewayElasticIP": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "NATGWRouteforPrivateRouteTable": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway"
+        }
+      }
+    },
+    "NatSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "DependsOn": "VPC",
+      "Properties": {
+        "GroupDescription": "Office Online NAT Security Group",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "3389",
+            "ToPort": "3389",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Office Online NAT Security Group STIG"
+          }
+        ]
+      }
+    },
+    "NatSecurityGroupIngress1": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "DependsOn": "NatSecurityGroup",
+      "Properties": {
+        "GroupId": {
+          "Ref": "NatSecurityGroup"
+        },
+        "IpProtocol": "-1",
+        "FromPort": "-1",
+        "ToPort": "-1",
+        "SourceSecurityGroupId": {
+          "Ref": "NatSecurityGroup"
+        }
+      }
+    },
+    "OfficeOnlineADServer": {
+      "Type": "AWS::EC2::Instance",
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "configSets": {
+            "config": [
+              "setup",
+              "installFeatures",
+              "installADDS",
+              "startService",
+              "createUser",
+              "domainAdmin",
+              "harden"
+            ]
+          },
+          "setup": {
+            "commands": {
+              "disable-fw": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"netsh advfirewall firewall set rule group='Network Discovery' new enable=yes"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              },
+              "local-dns": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"Get-NetAdapter | Select-Object InterfaceIndex | Set-DnsClientServerAddress -ServerAddresses ('127.0.0.1','8.8.8.8')"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "installFeatures": {
+            "commands": {
+              "ADDS": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"Install-WindowsFeature -Name AD-Domain-Services, rsat-adds -IncludeAllSubFeature"
+                    ]
+                  ]
+                },
+                "waitAfterCompletion": "0"
+              }
+            }
+          },
+          "installADDS": {
+            "commands": {
+              "installationADDS": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command Install-ADDSForest -DomainName ",
+                      {
+                        "Ref": "DomainDNSName"
+                      },
+                      " -SafeModeAdministratorPassword (ConvertTo-SecureString '",
+                      {
+                        "Ref": "DomainAdminUserPassword"
+                      },
+                      "' -AsPlainText -Force) -DomainMode WinThreshold -InstallDns:$true -DomainNetbiosName ",
+                      {
+                        "Ref": "DomainNetBiosName"
+                      },
+                      " -ForestMode WinThreshold -Confirm:$false -Force -NoRebootOnCompletion:$false"
+                    ]
+                  ]
+                },
+                "waitAfterCompletion": "0"
+              },
+              "restart-pc": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"Restart-Computer;"
+                    ]
+                  ]
+                },
+                "waitAfterCompletion": "0"
+              },
+              "install-aws-cli": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi"
+                    ]
+                  ]
+                },
+                "waitAfterCompletion": "0"
+              }
+            }
+          },
+          "startService": {
+            "commands": {
+              "start-adws": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \" Start-Service -Name ADWS; $s = Get-Service -Name ADWS; while ($s.Status -ne 'Running'){ Write-Host 'Sleeping 120'; Start-Sleep 120 }"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "createUser": {
+            "commands": {
+              "create-user": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"New-ADUser -Name ",
+                      {
+                        "Ref": "DomainAdminUser"
+                      },
+                      " -UserPrincipalName ",
+                      {
+                        "Ref": "DomainAdminUser"
+                      },
+                      "@",
+                      {
+                        "Ref": "DomainDNSName"
+                      },
+                      " -AccountPassword (ConvertTo-SecureString '",
+                      {
+                        "Ref": "DomainAdminUserPassword"
+                      },
+                      "' -AsPlainText -Force) -Enabled $true -PasswordNeverExpires $true -PassThru"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "domainAdmin": {
+            "commands": {
+              "domain-admin": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"Add-ADGroupMember -Identity 'Domain Admins' -Members ",
+                      {
+                        "Ref": "DomainAdminUser"
+                      }
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "harden": {
+            "files": {
+              "c:\\cfn\\scripts\\Harden-Device.ps1": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "$acl = Get-Acl -Path C:\\Windows\\System32\\winevt\\Logs\\*.evtx;",
+                      "$AccessRule = New-Object System.Security.Principal.NTAccount('NT AUTHORITY\\Authenticated Users');",
+                      "$acl.PurgeAccessRules($AccessRule);",
+                      "Rename-LocalUser -Name Guest -NewName StigUser;",
+                      "Rename-LocalUser -Name Administrator -NewName StigAdmin;",
+                      "New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\FipsAlgorithmPolicy' -Name 'Enabled' -Value 1 -PropertyType DWORD -Force;"
+                    ]
+                  ]
+                }
+              }
+            },
+            "commands": {
+              "run-script": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -ExecutionPolicy RemoteSigned -Command c:\\cfn\\scripts\\Harden-Device.ps1"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "ImageId": {
+          "Ref": "OfficeOnlineADInstanceAMI"
+        },
+        "InstanceType": "t2.small",
+        "KeyName": {
+          "Ref": "ec2KeyPair"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "OfficeOnlineSecurityGroup"
+          }
+        ],
+        "SubnetId": {
+          "Ref": "PrivateSubnet"
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/sda1",
+            "Ebs": {
+              "VolumeSize": "50",
+              "VolumeType": "gp2"
+            }
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "<script>\n",
+                "cfn-init.exe -v -c config -s ",
+                {
+                  "Ref": "AWS::StackId"
+                },
+                " -r OfficeOnlineADServer",
+                " --region ",
+                {
+                  "Ref": "AWS::Region"
+                },
+                "\n",
+                "</script>\n"
+              ]
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OfficeOnlineADServer"
+          },
+          {
+            "Key": "environment",
+            "Value": "STIG"
+          },
+          {
+            "Key": "amazon-inspector",
+            "Value": "true"
+          },
+          {
+            "Key": "Compliance",
+            "Value": "FedRAMP"
+          }
+        ]
+      }
+    },
+    "OfficeOnlineServer": {
+      "DependsOn": "OfficeOnlineADServer",
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "configSets": {
+            "config": [
+              "setup",
+              "join-domain",
+              "windows-features",
+              "download-vcredist",
+              "unzip-vcredist",
+              "install-vcredist",
+              "download-identity",
+              "unzip-identity",
+              "install-identity",
+              "download-iso",
+              "unzip-iso",
+              "mount-iso",
+              "install-iso",
+              "download-wacserver",
+              "unzip-wacserver",
+              "install-wacserver",
+              "download-lang-pack",
+              "unzip-lang-pack",
+              "extract-lang-pack",
+              "install-lang-pack",
+              "create-certificate",
+              "export-certificate",
+              "import-certificate",
+              "harden"
+            ]
+          },
+          "setup": {
+            "files": {
+              "c:\\cfn\\scripts\\Configure-Device.ps1": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "netsh advfirewall firewall set rule group='Network Discovery' new enable=yes;",
+                      "Get-NetAdapter | Select-Object InterfaceIndex | Set-DnsClientServerAddress -ServerAddresses ('",
+                      {
+                        "Fn::GetAtt": [
+                          "OfficeOnlineADServer",
+                          "PrivateIp"
+                        ]
+                      },
+                      "','8.8.8.8');",
+                      "msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi"
+                    ]
+                  ]
+                }
+              },
+              "c:\\Scripts\\config.xml": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "<Configuration><Logging Type='verbose' Path='C:\tmp' Template='OOServerSetup(*).log'/><Display Level='none' CompletionNotice='no' /><INSTALLLOCATION Value='C:\\Program Files\\Microsoft Office Servers\\'/><Setting Id='USINGUIINSTALLMODE' Value='0'/><Setting Id='SETUPTYPE' Value='CLEAN_INSTALL'/><Setting Id='SETUP_REBOOT' Value='Never'/></Configuration>"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            },
+            "commands": {
+              "run-script": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -ExecutionPolicy RemoteSigned -Command c:\\cfn\\scripts\\Configure-Device.ps1"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "join-domain": {
+            "commands": {
+              "run-script": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"Start-Sleep 1200; $password = ConvertTo-SecureString '",
+                      {
+                        "Ref": "DomainAdminUserPassword"
+                      },
+                      "' -AsPlainText -Force; $credentials = New-Object System.Management.Automation.PSCredential('oosadminuser', $password); Add-Computer -DomainName '",
+                      {
+                        "Ref": "DomainDNSName"
+                      },
+                      "' -Credential $credentials -Restart "
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "windows-features": {
+            "commands": {
+              "install-features": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"Add-WindowsFeature Web-Server,Web-Mgmt-Tools,Web-Mgmt-Console,Web-WebServer,Web-Common-Http,Web-Default-Doc,Web-Static-Content,Web-Performance,Web-Stat-Compression,Web-Dyn-Compression,Web-Security,Web-Filtering,Web-Windows-Auth,Web-App-Dev,Web-Net-Ext45,Web-Asp-Net45,Web-ISAPI-Ext,Web-ISAPI-Filter,Web-Includes,NET-Framework-45-Features,NET-Framework-45-Core,NET-WCF-HTTP-Activation45,Windows-Identity-Foundation,Server-Media-Foundation"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "download-vcredist": {
+            "commands": {
+              "downloading-vcredist": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"aws s3 cp s3://govcloud-oos/vcredist.zip C:/Scripts/vcredist/vcredist.zip"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "unzip-vcredist": {
+            "commands": {
+              "unzipping-vcredist": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"Expand-Archive C:/Scripts/vcredist/vcredist.zip -DestinationPath C:/Scripts/vcredist/"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "install-vcredist": {
+            "commands": {
+              "installer-vcredist": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"cd C:/Scripts/vcredist; Get-ChildItem -Filter *.exe | ForEach {Start-Process -NoNewWindow $_.FullName -ArgumentList '/s'}"
+                    ]
+                  ]
+                },
+                "waitAfterCompletion": "10"
+              }
+            }
+          },
+          "download-identity": {
+            "commands": {
+              "downloading-identity": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"aws s3 cp s3://govcloud-oos/identity.zip C:/Scripts/identity/identity.zip"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "unzip-identity": {
+            "commands": {
+              "unzipping-identity": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"Expand-Archive  C:/Scripts/identity/identity.zip -DestinationPath C:/Scripts/identity/"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "install-identity": {
+            "commands": {
+              "install-identity": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"cd C:/Scripts/identity/; Get-ChildItem -Path . -Filter *.msi | % {msiexec /i $_ /quiet /qn /norestart /log C:/Scripts/identity/install.log }"
+                    ]
+                  ]
+                },
+                "waitAfterCompletion": "10"
+              }
+            }
+          },
+          "download-iso": {
+            "commands": {
+              "downloading-iso": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"aws s3 cp s3://govcloud-oos/iso.zip C:/Scripts/iso/iso.zip"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "unzip-iso": {
+            "commands": {
+              "unzipping-iso": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"Expand-Archive  C:/Scripts/iso/iso.zip -DestinationPath C:/Scripts/iso/"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "mount-iso": {
+            "commands": {
+              "mounting-iso": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"cd C:/Scripts/iso; $mounted = Get-ChildItem -Filter *.iso; $file = Get-ChildItem -Filter *.iso; Mount-DiskImage -ImagePath $file.FullName"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "install-iso": {
+            "commands": {
+              "install-iso": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"Start-Process 'D:\\setup.exe' -ArgumentList '/config C:\\Scripts\\config.xml' -Wait;"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "download-wacserver": {
+            "commands": {
+              "downloading-wacserver": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"aws s3 cp s3://govcloud-oos/wacserver.zip C:/Scripts/wacserver/wacserver.zip"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "unzip-wacserver": {
+            "commands": {
+              "unzipping-wacserver": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"Expand-Archive  C:/Scripts/wacserver/wacserver.zip -DestinationPath C:/Scripts/wacserver/"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "install-wacserver": {
+            "commands": {
+              "installer-wacserver": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"cd C:/Scripts/wacserver; Get-ChildItem -Filter *.exe | ForEach {Start-Process -NoNewWindow $_.FullName -ArgumentList '/quiet'}"
+                    ]
+                  ]
+                },
+                "waitAfterCompletion": "10"
+              }
+            }
+          },
+          "download-lang-pack": {
+            "commands": {
+              "downloading-lang-pack": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"aws s3 cp s3://govcloud-oos/lang_pack.zip C:/Scripts/lang_pack/lang_pack.zip"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "unzip-lang-pack": {
+            "commands": {
+              "unzipping-lang-pack": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"Expand-Archive  C:/Scripts/lang_pack/lang_pack.zip -DestinationPath C:/Scripts/lang_pack/"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "extract-lang-pack": {
+            "commands": {
+              "extracting-lang-pack": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"cd C:/Scripts/lang_pack; $files = Get-ChildItem -Filter *.exe; Start-Process -NoNewWindow $files.FullName -ArgumentList '/quiet','/extract:C:\\Scripts\\lang_pack\\' -Passthru"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "install-lang-pack": {
+            "commands": {
+              "installing-lang-pack": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"Start-Process 'C:\\Scripts\\lang_pack\\setup.exe' -ArgumentList '/config C:\\Scripts\\config.xml' -Wait"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "create-certificate": {
+            "commands": {
+              "create-cert": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"New-SelfSignedCertificate -FriendlyName '",
+                      {
+                        "Ref": "DomainDNSName"
+                      },
+                      "' -CertStoreLocation 'cert:\\LocalMachine\\My'  -Subject ([System.Net.Dns]::GetHostByName($env:computerName)).HostName"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "export-certificate": {
+            "commands": {
+              "exporting-certificate": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"$mypwd = ConvertTo-SecureString -String 'qwerty1234!' -Force -AsPlainText; Get-ChildItem -Path Cert:\\LocalMachine\\my | Export-PfxCertificate -FilePath C:\\mypfx.pfx -Password $mypwd"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "import-certificate": {
+            "commands": {
+              "exporting-certificate": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -Command \"$mypwd = ConvertTo-SecureString -String 'qwerty1234!' -Force -AsPlainText; Import-PfxCertificate -Password $mypwd -CertStoreLocation 'Cert:\\LocalMachine\\Root' -FilePath C:\\mypfx.pfx"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          },
+          "harden": {
+            "files": {
+              "c:\\cfn\\scripts\\Harden-Device.ps1": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "$acl = Get-Acl -Path C:\\Windows\\System32\\winevt\\Logs\\*.evtx;",
+                      "$AccessRule = New-Object System.Security.Principal.NTAccount('NT AUTHORITY\\Authenticated Users');",
+                      "$acl.PurgeAccessRules($AccessRule);",
+                      "Rename-LocalUser -Name Guest -NewName StigUser;",
+                      "Rename-LocalUser -Name Administrator -NewName StigAdmin;",
+                      "New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\FipsAlgorithmPolicy' -Name 'Enabled' -Value 1 -PropertyType DWORD -Force;"
+                    ]
+                  ]
+                }
+              }
+            },
+            "commands": {
+              "run-script": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "powershell.exe -ExecutionPolicy RemoteSigned -Command c:\\cfn\\scripts\\Harden-Device.ps1"
+                    ]
+                  ]
+                },
+                "waitaftercompletion": "5"
+              }
+            }
+          }
+        }
+      },
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "OfficeOnlineEC2InstanceAMI"
+        },
+        "InstanceType": "t2.xlarge",
+        "IamInstanceProfile": {
+          "Ref": "S3InstanceProfile"
+        },
+        "KeyName": {
+          "Ref": "ec2KeyPair"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "OfficeOnlineSecurityGroup"
+          }
+        ],
+        "SubnetId": {
+          "Ref": "PrivateSubnet"
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/sda1",
+            "Ebs": {
+              "VolumeSize": "80",
+              "VolumeType": "gp2"
+            }
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "<script>\n",
+                "cfn-init.exe -v -c config -s ",
+                {
+                  "Ref": "AWS::StackId"
+                },
+                " -r OfficeOnlineServer",
+                " --region ",
+                {
+                  "Ref": "AWS::Region"
+                },
+                "\n",
+                "</script>\n"
+              ]
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OfficeOnlineServer STIG"
+          },
+          {
+            "Key": "environment",
+            "Value": "STIG"
+          },
+          {
+            "Key": "amazon-inspector",
+            "Value": "true"
+          },
+          {
+            "Key": "Compliance",
+            "Value": "FedRAMP"
+          }
+        ]
+      }
+    },
+    "OfficeOnlineLB": {
+      "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+      "Properties": {
+        "LoadBalancerName": "office-online-cloud-lb-STIG",
+        "CrossZone": "true",
+        "HealthCheck": {
+          "HealthyThreshold": 2,
+          "Interval": 15,
+          "Target": "HTTPS:443/hosting/discovery",
+          "Timeout": 5,
+          "UnhealthyThreshold": 5
+        },
+        "Instances": [
+          {
+            "Ref": "OfficeOnlineServer"
+          }
+        ],
+        "LBCookieStickinessPolicy": [
+          {
+            "PolicyName": "OfficeOnlineStickySessionPolicy"
+          }
+        ],
+        "Listeners": [
+          {
+            "InstancePort": "443",
+            "InstanceProtocol": "HTTPS",
+            "LoadBalancerPort": "443",
+            "Protocol": "HTTPS",
+            "SSLCertificateId": {
+              "Ref": "SSLCertificateARN"
+            },
+            "PolicyNames": [
+              "OfficeOnlineStickySessionPolicy"
+            ]
+          }
+        ],
+        "Scheme": "internet-facing",
+        "SecurityGroups": [
+          {
+            "Ref": "OfficeOnlineLBSecurityGroup"
+          }
+        ],
+        "Subnets": [
+          {
+            "Ref": "PublicSubnet"
+          }
+        ]
+      }
+    },
+    "OfficeOnlineLBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Office Online Server Load Balancer Security Group",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "172.31.0.0/16",
+            "FromPort": "443",
+            "IpProtocol": "tcp",
+            "ToPort": "443"
+          }
+        ],
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "FromPort": "443",
+            "IpProtocol": "tcp",
+            "ToPort": "443"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Office Online Server Load Balancer Security Group STIG"
+          },
+          {
+            "Key": "environment",
+            "Value": "STIG"
+          },
+          {
+            "Key": "Compliance",
+            "Value": "FedRAMP"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "OfficeOnlineSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Office Online Server Security Group",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "FromPort": "-1",
+            "IpProtocol": "-1",
+            "ToPort": "-1"
+          }
+        ],
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "FromPort": "443",
+            "IpProtocol": "tcp",
+            "ToPort": "443"
+          },
+          {
+            "SourceSecurityGroupId": {
+              "Ref": "OfficeOnlineLBSecurityGroup"
+            },
+            "FromPort": "-1",
+            "IpProtocol": "-1",
+            "ToPort": "-1"
+          },
+          {
+            "CidrIp": {
+              "Fn::Join": [
+                "/",
+                [
+                  {
+                    "Ref": "NATInstanceElasticIP"
+                  },
+                  "32"
+                ]
+              ]
+            },
+            "FromPort": "3389",
+            "IpProtocol": "tcp",
+            "ToPort": "3389"
+          },
+          {
+            "CidrIp": "10.0.0.0/8",
+            "FromPort": "3389",
+            "IpProtocol": "tcp",
+            "ToPort": "3389"
+          },
+          {
+            "CidrIp": "172.16.0.0/12",
+            "FromPort": "3389",
+            "IpProtocol": "tcp",
+            "ToPort": "3389"
+          },
+          {
+            "CidrIp": "192.168.0.0/16",
+            "FromPort": "3389",
+            "IpProtocol": "tcp",
+            "ToPort": "3389"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Office Online Server Security Group STIG"
+          },
+          {
+            "Key": "environment",
+            "Value": "STIG"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "OfficeOnlineSecurityGroupIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "DependsOn": "OfficeOnlineSecurityGroup",
+      "Properties": {
+        "GroupId": {
+          "Ref": "OfficeOnlineSecurityGroup"
+        },
+        "IpProtocol": "-1",
+        "FromPort": "-1",
+        "ToPort": "-1",
+        "SourceSecurityGroupId": {
+          "Ref": "OfficeOnlineSecurityGroup"
+        }
+      }
+    },
+    "OfficeOnlineSecurityGroupIngress1": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "DependsOn": "OfficeOnlineSecurityGroup",
+      "Properties": {
+        "CidrIp": {
+          "Fn::Join": [
+            "/",
+            [
+              {
+                "Fn::GetAtt": [
+                  "OfficeOnlineADServer",
+                  "PrivateIp"
+                ]
+              },
+              "32"
+            ]
+          ]
+        },
+        "GroupId": {
+          "Ref": "OfficeOnlineSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "389",
+        "ToPort": "389"
+      }
+    }
+  },
+  "Outputs": {
+    "ADDomainDNSName": {
+      "Description": "Fully qualified domain name (FQDN) of the forest root domain",
+      "Value": {
+        "Ref": "DomainDNSName"
+      }
+    },
+    "ADDomainNetBiosName": {
+      "Description": "Netbios name for the domain",
+      "Value": {
+        "Ref": "DomainNetBiosName"
+      }
+    },
+    "OosAdminUserName": {
+      "Description": "Account added as Domain Administrator",
+      "Value": {
+        "Ref": "DomainAdminUser"
+      }
+    }
+  }
+}
