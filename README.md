@@ -50,6 +50,12 @@ iex "& { $(irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/boot
 
 # Dry run to preview changes
 iex "& { $(irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/bootstrap.ps1) } -DryRun"
+
+# Development/Testing - Use dev branch for latest features
+iex "& { $(irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/dev/bootstrap.ps1) } -Branch dev -WindowsHardening"
+
+# Custom branch selection (main or dev)
+iex "& { $(irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/dev/bootstrap.ps1) } -Branch main -WindowsHardening -HardeningMode Full"
 ```
 
 **Installation Locations:**
@@ -62,6 +68,22 @@ iex "& { $(irm https://raw.githubusercontent.com/NotINeverMe/stig-auto/main/boot
 - Automatic STIG content management
 - Native CKL file generation for STIG Viewer
 - **NIST 800-171 rev2** compliance hardening modules
+
+## Bootstrap Script Parameters
+
+### Windows PowerShell Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `-DryRun` | Switch | False | Preview changes without executing them |
+| `-WindowsHardening` | Switch | False | Apply additional NIST 800-171 hardening |
+| `-HardeningMode` | String | 'Essential' | Hardening level: 'Essential' or 'Full' |
+| `-Branch` | String | 'main' | Git branch to use: 'main' or 'dev' |
+
+**Examples:**
+- **Testing**: Use `-Branch dev` to test latest features before they're merged to main
+- **Production**: Use `-Branch main` (default) for stable releases
+- **Development**: Use `-Branch dev -DryRun` to preview changes from development branch
 
 ## Manual Installation
 

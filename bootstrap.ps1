@@ -8,7 +8,10 @@ param(
     [switch]$WindowsHardening,
     
     [ValidateSet('Full', 'Essential')]
-    [string]$HardeningMode = 'Essential'
+    [string]$HardeningMode = 'Essential',
+    
+    [ValidateSet('main', 'dev')]
+    [string]$Branch = 'main'
 )
 
 # Directory for pipeline logs and summary report
@@ -204,16 +207,16 @@ if (-not $DryRun) {
 
 # Clone repo to the repository directory if not present
 if (!(Test-Path $RepoDir)) {
-    Write-Host "Cloning repository to C:\stig-pipe"
+    Write-Host "Cloning repository to C:\stig-pipe (branch: $Branch)"
     if (-not $DryRun) {
-        Write-Host "==> git clone https://github.com/NotINeverMe/stig-auto.git `"$RepoDir`""
-        $cloneResult = & git clone https://github.com/NotINeverMe/stig-auto.git $RepoDir 2>&1
+        Write-Host "==> git clone -b $Branch https://github.com/NotINeverMe/stig-auto.git `"$RepoDir`""
+        $cloneResult = & git clone -b $Branch https://github.com/NotINeverMe/stig-auto.git $RepoDir 2>&1
         if ($LASTEXITCODE -ne 0) {
             Write-Error "Git clone failed: $cloneResult"
             exit 1
         }
     } else {
-        Write-Host "==> git clone https://github.com/NotINeverMe/stig-auto.git `"$RepoDir`""
+        Write-Host "==> git clone -b $Branch https://github.com/NotINeverMe/stig-auto.git `"$RepoDir`""
     }
     
     # Verify critical directories were cloned (only in non-dry-run mode)
@@ -237,6 +240,37 @@ if (!(Test-Path $RepoDir)) {
     }
 } else {
     Write-Host "Repository already exists at $RepoDir"
+    
+    # Pull latest changes from the repository
+    Write-Host "Updating repository with latest changes from $Branch branch..." -ForegroundColor Cyan
+    if (-not $DryRun) {
+        Push-Location $RepoDir
+        try {
+            # Switch to the specified branch if not already on it
+            $currentBranch = & git branch --show-current 2>&1
+            if ($currentBranch -ne $Branch) {
+                Write-Host "==> git checkout $Branch"
+                $checkoutResult = & git checkout $Branch 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Warning "Git checkout failed: $checkoutResult"
+                    Write-Warning "Continuing with current branch..."
+                }
+            }
+            
+            Write-Host "==> git pull origin $Branch"
+            $pullResult = & git pull origin $Branch 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "Git pull failed: $pullResult"
+                Write-Warning "Continuing with existing files..."
+            } else {
+                Write-Host "Repository updated successfully from $Branch branch" -ForegroundColor Green
+            }
+        } finally {
+            Pop-Location
+        }
+    } else {
+        Write-Host "==> git pull origin $Branch (dry run)"
+    }
     
     # Verify critical paths exist even if repo was already present (only in non-dry-run mode)
     if (-not $DryRun) {
