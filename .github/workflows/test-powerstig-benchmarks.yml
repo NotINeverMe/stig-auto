@@ -30,7 +30,7 @@ jobs:
       shell: powershell
       run: |
         # Install PowerSTIG with version pinning for consistent tests
-        $powerStigVersion = "5.0.1"
+        $powerStigVersion = "4.26.0"
         
         Write-Host "Installing PowerSTIG v$powerStigVersion for testing..."
         try {

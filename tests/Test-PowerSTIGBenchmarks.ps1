@@ -39,10 +39,10 @@ function Test-Assert {
     
     if ($Condition) {
         $TestResults.Passed++
-        Write-Host "✓ PASS: $TestName" -ForegroundColor Green
+        Write-Host "PASS: $TestName" -ForegroundColor Green
     } else {
         $TestResults.Failed++
-        Write-Host "✗ FAIL: $TestName - $Message" -ForegroundColor Red
+        Write-Host "FAIL: $TestName - $Message" -ForegroundColor Red
     }
 }
 
@@ -212,6 +212,6 @@ if ($TestResults.Failed -gt 0) {
     exit 1
 } else {
     Write-Host ""
-    Write-Host "All PowerSTIG benchmark tests passed! ✓" -ForegroundColor Green
+    Write-Host "All PowerSTIG benchmark tests passed!" -ForegroundColor Green
     exit 0
 }

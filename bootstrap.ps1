@@ -178,7 +178,7 @@ Write-Host "Installing PowerSTIG module for native Windows STIG compliance..." -
 if (-not $DryRun) {
     # Install PowerSTIG from PowerShell Gallery
     # Pin to a known-good PowerSTIG version for deterministic builds
-    $powerStigVersion = "5.0.1"  # Update as needed for newer stable releases
+    $powerStigVersion = "4.26.0"  # Update as needed for newer stable releases
     
     $installedModule = Get-Module -ListAvailable -Name PowerSTIG | Where-Object { $_.Version -eq $powerStigVersion }
     if ($installedModule) {
