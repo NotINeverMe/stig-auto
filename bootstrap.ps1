@@ -227,6 +227,41 @@ function Test-GitRepository {
            (Get-ChildItem $Path -Force | Where-Object { $_.Name -ne ".git" } | Measure-Object).Count -gt 0
 }
 
+function Invoke-Git {
+    param([string]$Args)
+    Write-Verbose "Executing: git $Args"
+    
+    # Parse arguments properly to handle quoted paths
+    $gitArgs = @()
+    $inQuotes = $false
+    $currentArg = ""
+    
+    for ($i = 0; $i -lt $Args.Length; $i++) {
+        $char = $Args[$i]
+        if ($char -eq '"' -and ($i -eq 0 -or $Args[$i-1] -ne '\')) {
+            $inQuotes = -not $inQuotes
+        } elseif ($char -eq ' ' -and -not $inQuotes) {
+            if ($currentArg) {
+                $gitArgs += $currentArg
+                $currentArg = ""
+            }
+        } else {
+            $currentArg += $char
+        }
+    }
+    if ($currentArg) {
+        $gitArgs += $currentArg
+    }
+    
+    $out = & git $gitArgs 2>&1  # capture both streams
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Git operation failed: $out" -ForegroundColor Red
+        throw "Git command failed with exit code $LASTEXITCODE"
+    }
+    Write-Verbose $out                 # benign progress → verbose
+    return $out
+}
+
 function Invoke-GitClone {
     param(
         [string]$Branch,
@@ -258,32 +293,26 @@ function Invoke-GitClone {
             }
             
             Write-Host "==> git clone -b $Branch $RepoUrl `"$TargetDir`""
-            $cloneResult = & git clone -b $Branch $RepoUrl $TargetDir 2>&1
-            
-            if ($LASTEXITCODE -ne 0) {
-                # Use Write-Host instead of Write-Error to prevent PowerShell code parsing
-                Write-Host "Git clone failed with exit code $LASTEXITCODE" -ForegroundColor Red
-                Write-Host "Error details: $($cloneResult -join "`n")" -ForegroundColor Red
-                
+            try {
+                Invoke-Git "clone --progress -b $Branch $RepoUrl `"$TargetDir`""
+                Write-Host "Repository cloned successfully" -ForegroundColor Green
+            } catch {
                 # Try alternative approach: clone to temp directory then move
                 $TempDir = "$ParentDir\stig-auto-temp-$(Get-Random)"
                 Write-Host "Attempting alternative clone to temporary directory..." -ForegroundColor Yellow
                 
-                $tempCloneResult = & git clone -b $Branch $RepoUrl $TempDir 2>&1
-                if ($LASTEXITCODE -eq 0) {
+                try {
+                    Invoke-Git "clone --progress -b $Branch $RepoUrl `"$TempDir`""
                     Write-Host "Temporary clone successful, moving to target directory..." -ForegroundColor Green
                     if (Test-Path $TargetDir) {
                         Remove-Item -Path $TargetDir -Recurse -Force -ErrorAction SilentlyContinue
                     }
                     Move-Item -Path $TempDir -Destination $TargetDir -Force
                     Write-Host "Repository moved successfully to $TargetDir" -ForegroundColor Green
-                } else {
-                    Write-Host "Alternative clone also failed: $($tempCloneResult -join "`n")" -ForegroundColor Red
-                    Write-Host "Please check network connectivity and try again." -ForegroundColor Yellow
+                } catch {
+                    Write-Host "Alternative clone also failed. Please check network connectivity and try again." -ForegroundColor Red
                     exit 1
                 }
-            } else {
-                Write-Host "Repository cloned successfully" -ForegroundColor Green
             }
         } finally {
             # Restore original location if we changed it
@@ -314,8 +343,9 @@ function Invoke-GitUpdate {
             Set-Location $RepoDir
             
             # Check if it's a valid git repository
-            $isGitRepo = & git rev-parse --is-inside-work-tree 2>&1
-            if ($LASTEXITCODE -ne 0) {
+            try {
+                Invoke-Git "rev-parse --is-inside-work-tree"
+            } catch {
                 Write-Host "Directory exists but is not a valid git repository. Re-cloning..." -ForegroundColor Yellow
                 Set-Location $OriginalLocation
                 Remove-Item -Path $RepoDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -323,31 +353,15 @@ function Invoke-GitUpdate {
                 return
             }
             
-            # Switch to the specified branch if not already on it
-            $currentBranch = & git branch --show-current 2>&1
-            if ($LASTEXITCODE -eq 0 -and $currentBranch -ne $Branch) {
-                Write-Host "==> git checkout $Branch"
-                $checkoutResult = & git checkout $Branch 2>&1 | Out-String
-                if ($LASTEXITCODE -ne 0) {
-                    Write-Host "Git checkout failed: $checkoutResult" -ForegroundColor Yellow
-                    Write-Host "Continuing with current branch..." -ForegroundColor Yellow
-                } else {
-                    Write-Host "Switched to branch $Branch" -ForegroundColor Green
-                }
-            }
-            
-            Write-Host "==> git pull origin $Branch"
-            $pullResult = & git pull origin $Branch 2>&1 | Out-String
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "Git pull failed: $pullResult" -ForegroundColor Yellow
-                Write-Host "Continuing with existing files..." -ForegroundColor Yellow
-            } else {
+            # Use fetch + reset --hard for deterministic updates instead of pull
+            Write-Host "==> git fetch origin $Branch"
+            try {
+                Invoke-Git "fetch origin $Branch"
+                Write-Host "==> git reset --hard origin/$Branch"
+                Invoke-Git "reset --hard origin/$Branch"
                 Write-Host "Repository updated successfully from $Branch branch" -ForegroundColor Green
-                # Only show pull result if there were actual changes
-                if ($pullResult -notmatch "Already up to date" -and $pullResult.Trim()) {
-                    Write-Host "Changes pulled:" -ForegroundColor Cyan
-                    Write-Host $pullResult.Trim() -ForegroundColor Gray
-                }
+            } catch {
+                Write-Host "Git update failed, continuing with existing files..." -ForegroundColor Yellow
             }
         } finally {
             Set-Location $OriginalLocation
